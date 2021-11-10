@@ -48,7 +48,7 @@ var initCmd = &cobra.Command{
 				pr_number TEXT NULL,
 				stacked_on TEXT NULL
 			);
-			CREATE UNIQUE INDEX idx_diffs_id ON diffs (id);
+			CREATE UNIQUE INDEX IF NOT EXISTS idx_diffs_id ON diffs (id);
 		`
 
 		// execute a query on the server

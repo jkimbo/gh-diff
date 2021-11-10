@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"fmt"
+	"log"
 	"os"
 
+	"github.com/go-git/go-git/v5"
 	"github.com/spf13/cobra"
 )
 
@@ -21,4 +23,9 @@ func Execute() {
 }
 
 func init() {
+	// Check that we are inside a git repo
+	_, err := git.PlainOpen(".")
+	if err != nil {
+		log.Fatalf("Current directory is not a git repo")
+	}
 }
