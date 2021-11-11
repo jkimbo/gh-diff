@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3" // so that sqlx works with sqlite
@@ -87,14 +86,23 @@ var initCmd = &cobra.Command{
 		if err != nil {
 			log.Fatalf(err.Error())
 		}
-		defaultBranch = strings.TrimSuffix(defaultBranch, "\n")
 
 		config := &Config{
 			DefaultBranch: defaultBranch,
 		}
 
 		disablePushCmd := exec.Command("git", "config", fmt.Sprintf("branch.%s.pushRemote", defaultBranch), "no_push")
-		_, err = runCommand("Disable push to master", disablePushCmd, true)
+		_, err = runCommand("Disable push to master", disablePushCmd, false)
+		if err != nil {
+			log.Fatalf(err.Error())
+		}
+
+		// Set pull.rebase to true
+		_, err = runCommand(
+			"Set config pull.rebase to true",
+			exec.Command("git", "config", "pull.rebase", "true"),
+			false,
+		)
 		if err != nil {
 			log.Fatalf(err.Error())
 		}
