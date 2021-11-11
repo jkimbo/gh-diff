@@ -2,6 +2,9 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -13,7 +16,49 @@ var syncCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		commit := args[0]
 
-		fmt.Printf("Syncing diff: %s", commit)
+		// Check that commit is valid
+		_, err := runCommand(
+			"Checking commit is valid",
+			exec.Command("git", "cat-file", "-e", commit),
+			false,
+		)
+		if err != nil {
+			os.Exit(1)
+		}
+
+		fmt.Println("Syncing diff:", commit)
+
+		// Find diff trailer
+		trailers, err := runCommand(
+			"Get commit trailers",
+			exec.Command(
+				"bash",
+				"-c",
+				fmt.Sprintf("git show -s --format=%%B %s | git interpret-trailers --parse", commit),
+			),
+			true,
+		)
+		if err != nil {
+			os.Exit(1)
+		}
+
+		lines := strings.Split(trailers, "\n")
+		var diffID string
+		for _, line := range lines {
+			kv := strings.Split(strings.TrimSpace(line), ":")
+			if kv[0] == "Diff-ID" {
+				diffID = strings.TrimSpace(kv[1])
+				break
+			}
+		}
+
+		if diffID != "" {
+			fmt.Println("Found diff:", diffID)
+		} else {
+			fmt.Println("Commit hasn't been synced yet")
+
+			// Add diff
+		}
 
 		// TODO
 		// * If diff has already been synced
