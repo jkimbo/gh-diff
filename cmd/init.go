@@ -15,19 +15,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type GitHubConfig struct {
-	Owner   string
-	Project string
-}
-
 type Config struct {
-	BaseRef    string       `yaml:"base_ref"`
-	GitHubRepo GitHubConfig `yaml:"github_repo"`
-}
-
-func (c *Config) getBaseBranch() string {
-	baseBranch := c.BaseRef[strings.LastIndex(c.BaseRef, "/")+1:]
-	return baseBranch
+	DefaultBranch string `yaml:"default_branch"`
 }
 
 var config *Config
@@ -93,21 +82,18 @@ var initCmd = &cobra.Command{
 		db.MustExec(schema)
 
 		// Get base branch name
-		gitCmd := exec.Command("git", "rev-parse", "--abbrev-ref", "origin/HEAD")
-		output, err := runCommand("Get HEAD branch name", gitCmd, true)
+		gitCmd := exec.Command("gh", "repo", "view", "--json=defaultBranchRef", "--jq=.defaultBranchRef.name")
+		defaultBranch, err := runCommand("Get HEAD branch name", gitCmd, true)
 		if err != nil {
 			log.Fatalf(err.Error())
 		}
-
-		baseRef := strings.TrimSuffix(output, "\n")
+		defaultBranch = strings.TrimSuffix(defaultBranch, "\n")
 
 		config := &Config{
-			BaseRef:    baseRef,
-			GitHubRepo: GitHubConfig{},
+			DefaultBranch: defaultBranch,
 		}
-		baseBranch := config.getBaseBranch()
 
-		disablePushCmd := exec.Command("git", "config", fmt.Sprintf("branch.%s.pushRemote", baseBranch), "no_push")
+		disablePushCmd := exec.Command("git", "config", fmt.Sprintf("branch.%s.pushRemote", defaultBranch), "no_push")
 		_, err = runCommand("Disable push to master", disablePushCmd, true)
 		if err != nil {
 			log.Fatalf(err.Error())
