@@ -9,9 +9,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var repo *git.Repository
+
 var rootCmd = &cobra.Command{
 	Use:   "stacked",
-	Short: "stacked diffs",
+	Short: "Stacked diffs 📚",
 }
 
 // Execute run root command
@@ -24,8 +26,10 @@ func Execute() {
 
 func init() {
 	// Check that we are inside a git repo
-	_, err := git.PlainOpen(".")
+	currentRepo, err := git.PlainOpen(".")
 	if err != nil {
 		log.Fatalf("Current directory is not a git repo")
 	}
+
+	repo = currentRepo
 }

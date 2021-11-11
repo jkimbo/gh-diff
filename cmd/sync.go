@@ -8,12 +8,12 @@ import (
 
 var syncCmd = &cobra.Command{
 	Use:   "sync [commit]",
-	Short: "Sync a commit",
+	Short: "Sync a diff",
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		commit := args[0]
 
-		fmt.Printf("Syncing commit: %s", commit)
+		fmt.Printf("Syncing diff: %s", commit)
 
 		// TODO
 		// * If diff has already been synced
