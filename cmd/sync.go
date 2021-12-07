@@ -81,6 +81,11 @@ var syncCmd = &cobra.Command{
 			log.Fatalf("Unable to connect to database: %v\n", err)
 		}
 
+		config, err := loadConfig()
+		if err != nil {
+			log.Fatalf("err: %v\n", err)
+		}
+
 		// Store current branch so that we can switch back to it later
 		currentBranch, err := runCommand(
 			"Get current branch",
@@ -88,7 +93,7 @@ var syncCmd = &cobra.Command{
 			true,
 		)
 
-		baseRef := fmt.Sprintf("origin/%s", "main")
+		baseRef := fmt.Sprintf("origin/%s", config.DefaultBranch)
 
 		_, err = sqlDB.GetDiff(ctx, diffID)
 		if err != nil {
