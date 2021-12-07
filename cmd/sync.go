@@ -76,12 +76,21 @@ var syncCmd = &cobra.Command{
 			return
 		}
 
-		db, err := db.NewDB(ctx, filepath.Join(".stacked", "main.db"))
+		sqlDB, err := db.NewDB(ctx, filepath.Join(".stacked", "main.db"))
 		if err != nil {
 			log.Fatalf("Unable to connect to database: %v\n", err)
 		}
 
-		_, err = db.GetDiff(ctx, diffID)
+		// Store current branch so that we can switch back to it later
+		currentBranch, err := runCommand(
+			"Get current branch",
+			exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD"),
+			true,
+		)
+
+		baseRef := fmt.Sprintf("origin/%s", "main")
+
+		_, err = sqlDB.GetDiff(ctx, diffID)
 		if err != nil {
 			if err != sql.ErrNoRows {
 				log.Fatalf("error: %v", err)
@@ -104,9 +113,115 @@ var syncCmd = &cobra.Command{
 			if err != nil {
 				log.Fatalf("error: %v", err)
 			}
-			log.Printf("branchName: %s\n", branchName)
-		} else {
+
+			// TODO check parent commit to see if it's also a diff
+
+			log.Printf("Syncing %s to branch %s\n", commit, branchName)
+
+			// Note: we don't care if this command fails
+			runCommand(
+				"Delete branch locally",
+				exec.Command(
+					"bash",
+					"-c",
+					fmt.Sprintf(
+						"git branch -D %s",
+						branchName,
+					),
+				),
+				true,
+			)
+
+			_, err = runCommand(
+				"Create new branch",
+				exec.Command(
+					"git", "branch", "--no-track", branchName, baseRef,
+				),
+				true,
+			)
+			if err != nil {
+				log.Fatalf("error: %v", err)
+			}
+
+			_, err = runCommand(
+				"Switch to branch",
+				exec.Command(
+					"git", "switch", branchName,
+				),
+				true,
+			)
+			if err != nil {
+				log.Fatalf("error: %v", err)
+			}
+
+			cherryPickMsg, err := runCommand(
+				"Cherry pick commit",
+				exec.Command(
+					"git", "cherry-pick", commit,
+				),
+				true,
+			)
+			if err != nil {
+				_, err = runCommand(
+					"Abort cherry pick",
+					exec.Command(
+						"git", "cherry-pick", "--abort",
+					),
+					true,
+				)
+				if err != nil {
+					log.Fatalf("error: %v", err)
+				}
+
+				_, err = runCommand(
+					"Switch to branch",
+					exec.Command(
+						"git", "switch", currentBranch,
+					),
+					true,
+				)
+				if err != nil {
+					log.Fatalf("error: %v", err)
+				}
+				log.Printf("cherry-pick failed: %v\n", cherryPickMsg)
+				os.Exit(1)
+			}
+
+			_, err = runCommand(
+				"Push branch",
+				exec.Command(
+					"git", "push", "origin", branchName, "--force",
+				),
+				false,
+			)
+			if err != nil {
+				log.Fatalf("error: %v", err)
+			}
+
+			_, err = runCommand(
+				"Switch back to current branch",
+				exec.Command(
+					"git", "switch", currentBranch,
+				),
+				true,
+			)
+			if err != nil {
+				log.Fatalf("error: %v", err)
+			}
+
+			// save diff
+			err = sqlDB.CreateDiff(ctx, &db.Diff{
+				ID:     diffID,
+				Branch: branchName,
+			})
+			if err != nil {
+				log.Fatalf("error: %v", err)
+			}
+
+			return
 		}
+
+		log.Print("Diff already exists")
 
 		// diffID = fmt.Sprintf("D%s", randomString(5))
 
