@@ -119,14 +119,37 @@ var landCmd = &cobra.Command{
 
 		// Merge branch
 		_, err = runCommand(
-			"Merge branch",
+			"Cherry pick commit",
 			exec.Command(
-				"git", "merge", "--squash", diff.Branch,
+				"git", "cherry-pick", commit,
 			),
 			true,
 		)
 		if err != nil {
-			log.Fatalf("err: %v", err)
+			cherryPickErr := err
+
+			_, err = runCommand(
+				"Abort cherry pick",
+				exec.Command(
+					"git", "cherry-pick", "--abort",
+				),
+				true,
+			)
+			if err != nil {
+				log.Fatalf("err: %v", err)
+			}
+
+			_, err = runCommand(
+				"Switch to branch",
+				exec.Command(
+					"git", "switch", currentBranch,
+				),
+				true,
+			)
+			if err != nil {
+				log.Fatalf("err: %v", err)
+			}
+			log.Fatalf("err: %v", cherryPickErr)
 		}
 
 		// Push branch
