@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/AlecAivazis/survey/v2"
 	"github.com/jkimbo/stacked/db"
 	"github.com/spf13/cobra"
 )
@@ -149,6 +150,35 @@ func syncDiff(commit, branchName, baseRef, currentBranch string) error {
 	return nil
 }
 
+func diffIDFromCommit(commit string) (string, error) {
+	// Find diff trailer
+	trailers, err := runCommand(
+		"Get commit trailers",
+		exec.Command(
+			"bash",
+			"-c",
+			fmt.Sprintf("git show -s --format=%%B %s | git interpret-trailers --parse", commit),
+		),
+		true,
+	)
+	if err != nil {
+		return "", err
+	}
+
+	lines := strings.Split(trailers, "\n")
+	var diffID string
+	// TODO raise error if multiple diff ids found
+	for _, line := range lines {
+		kv := strings.Split(strings.TrimSpace(line), ":")
+		if kv[0] == "DiffID" {
+			diffID = strings.TrimSpace(kv[1])
+			break
+		}
+	}
+
+	return diffID, nil
+}
+
 var syncCmd = &cobra.Command{
 	Use:   "sync [commit]",
 	Short: "Sync a diff",
@@ -182,27 +212,9 @@ var syncCmd = &cobra.Command{
 		fmt.Println("Syncing diff:", commit)
 
 		// Find diff trailer
-		trailers, err := runCommand(
-			"Get commit trailers",
-			exec.Command(
-				"bash",
-				"-c",
-				fmt.Sprintf("git show -s --format=%%B %s | git interpret-trailers --parse", commit),
-			),
-			true,
-		)
+		diffID, err := diffIDFromCommit(commit)
 		if err != nil {
-			log.Fatalf("error: %v", err)
-		}
-
-		lines := strings.Split(trailers, "\n")
-		var diffID string
-		for _, line := range lines {
-			kv := strings.Split(strings.TrimSpace(line), ":")
-			if kv[0] == "DiffID" {
-				diffID = strings.TrimSpace(kv[1])
-				break
-			}
+			log.Fatalf("err: %s", err)
 		}
 
 		if diffID == "" {
@@ -228,8 +240,6 @@ var syncCmd = &cobra.Command{
 			true,
 		)
 
-		baseRef := fmt.Sprintf("origin/%s", config.DefaultBranch)
-
 		diff, err := sqlDB.GetDiff(ctx, diffID)
 		if err != nil {
 			if err != sql.ErrNoRows {
@@ -254,7 +264,42 @@ var syncCmd = &cobra.Command{
 				log.Fatalf("error: %v", err)
 			}
 
+			var baseRef string
 			// TODO check parent commit to see if it's also a diff
+			parentCommit, err := runCommand(
+				"Get parent commit",
+				exec.Command(
+					"git", "rev-parse", fmt.Sprintf("%s^", commit),
+				),
+				true,
+			)
+			if err != nil {
+				log.Fatalf("error: %v", err)
+			}
+
+			parentDiffID, err := diffIDFromCommit(parentCommit)
+			if err != nil {
+				log.Fatalf("error: %v", err)
+			}
+
+			if parentDiffID != "" {
+				parentDiff, err := sqlDB.GetDiff(ctx, parentDiffID)
+				if err != nil {
+					if err != sql.ErrNoRows {
+						log.Fatalf("error: %v", err)
+					}
+					baseRef = fmt.Sprintf("origin/%s", config.DefaultBranch)
+				} else {
+					prompt := &survey.Select{
+						Message: fmt.Sprintf("Base?"),
+						Options: []string{
+							parentDiff.Branch,
+							fmt.Sprintf("origin/%s", config.DefaultBranch),
+						},
+					}
+					survey.AskOne(prompt, &baseRef)
+				}
+			}
 
 			log.Printf("Syncing %s to branch %s\n", commit, branchName)
 
@@ -276,6 +321,17 @@ var syncCmd = &cobra.Command{
 		}
 
 		log.Print("Diff already exists")
+
+		var baseRef string
+		if diff.StackedOn != "" {
+			parentDiff, err := sqlDB.GetDiff(ctx, diff.StackedOn)
+			if err != nil {
+				log.Fatalf("error: %v", err)
+			}
+			baseRef = parentDiff.Branch
+		} else {
+			baseRef = fmt.Sprintf("origin/%s", config.DefaultBranch)
+		}
 
 		err = syncDiff(commit, diff.Branch, baseRef, currentBranch)
 		if err != nil {
