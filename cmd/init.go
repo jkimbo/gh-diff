@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -8,7 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/jmoiron/sqlx"
+	"github.com/jkimbo/stacked/db"
 	_ "github.com/mattn/go-sqlite3" // so that sqlx works with sqlite
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -45,6 +46,8 @@ var initCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Initialise stacked")
 
+		ctx := context.Background()
+
 		newpath := filepath.Join(".", ".stacked")
 		err := os.MkdirAll(newpath, os.ModePerm)
 		if err != nil {
@@ -62,23 +65,15 @@ var initCmd = &cobra.Command{
 			log.Println("main.db created")
 		}
 
-		db, err := sqlx.Open("sqlite3", filepath.Join(".stacked", "main.db"))
+		db, err := db.NewDB(ctx, filepath.Join(".stacked", "main.db"))
 		if err != nil {
 			log.Fatalf("Unable to connect to database: %v\n", err)
 		}
 
-		schema := `
-			CREATE TABLE IF NOT EXISTS diffs (
-				id TEXT PRIMARY KEY,
-				branch TEXT,
-				pr_number TEXT NULL,
-				stacked_on TEXT NULL
-			);
-			CREATE UNIQUE INDEX IF NOT EXISTS idx_diffs_id ON diffs (id);
-		`
-
-		// execute a query on the server
-		db.MustExec(schema)
+		err = db.Init(ctx)
+		if err != nil {
+			log.Fatalf("error setting up db: %v", err)
+		}
 
 		// Get base branch name
 		gitCmd := exec.Command("gh", "repo", "view", "--json=defaultBranchRef", "--jq=.defaultBranchRef.name")
@@ -91,11 +86,11 @@ var initCmd = &cobra.Command{
 			DefaultBranch: defaultBranch,
 		}
 
-		disablePushCmd := exec.Command("git", "config", fmt.Sprintf("branch.%s.pushRemote", defaultBranch), "no_push")
-		_, err = runCommand("Disable push to master", disablePushCmd, false)
-		if err != nil {
-			log.Fatalf(err.Error())
-		}
+		// disablePushCmd := exec.Command("git", "config", fmt.Sprintf("branch.%s.pushRemote", defaultBranch), "no_push")
+		// _, err = runCommand("Disable push to master", disablePushCmd, false)
+		// if err != nil {
+		// 	log.Fatalf(err.Error())
+		// }
 
 		// Set pull.rebase to true
 		_, err = runCommand(
