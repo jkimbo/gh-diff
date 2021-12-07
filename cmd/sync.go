@@ -64,14 +64,14 @@ var syncCmd = &cobra.Command{
 		var diffID string
 		for _, line := range lines {
 			kv := strings.Split(strings.TrimSpace(line), ":")
-			if kv[0] == "Diff-ID" {
+			if kv[0] == "DiffID" {
 				diffID = strings.TrimSpace(kv[1])
 				break
 			}
 		}
 
 		if diffID == "" {
-			fmt.Println("Commit is missing a Diff-ID")
+			fmt.Println("Commit is missing a DiffID")
 			os.Exit(1)
 			return
 		}
