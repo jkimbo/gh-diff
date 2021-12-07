@@ -15,6 +15,39 @@ import (
 )
 
 func syncDiff(commit, branchName, baseRef, currentBranch string) error {
+	commitDate, err := runCommand(
+		"Get commit date",
+		exec.Command(
+			"git", "show", "-s", "--format=%ci", commit,
+		),
+		true,
+	)
+	if err != nil {
+		return err
+	}
+
+	committerName, err := runCommand(
+		"Get committer name",
+		exec.Command(
+			"git", "show", "-s", "--format=%cn", commit,
+		),
+		true,
+	)
+	if err != nil {
+		return err
+	}
+
+	committerEmail, err := runCommand(
+		"Get committer email",
+		exec.Command(
+			"git", "show", "-s", "--format=%ce", commit,
+		),
+		true,
+	)
+	if err != nil {
+		return err
+	}
+
 	// Note: we don't care if this command fails
 	runCommand(
 		"Delete branch locally",
@@ -29,7 +62,7 @@ func syncDiff(commit, branchName, baseRef, currentBranch string) error {
 		true,
 	)
 
-	_, err := runCommand(
+	_, err = runCommand(
 		"Create new branch",
 		exec.Command(
 			"git", "branch", "--no-track", branchName, baseRef,
@@ -51,15 +84,21 @@ func syncDiff(commit, branchName, baseRef, currentBranch string) error {
 		return err
 	}
 
+	cmd := exec.Command(
+		"git", "cherry-pick", commit,
+	)
+	cmd.Env = append(cmd.Env, fmt.Sprintf("GIT_COMMITTER_NAME=%s", committerName))
+	cmd.Env = append(cmd.Env, fmt.Sprintf("GIT_COMMITTER_EMAIL=%s", committerEmail))
+	cmd.Env = append(cmd.Env, fmt.Sprintf("GIT_COMMITTER_DATE=%s", commitDate))
+
 	cherryPickMsg, err := runCommand(
 		"Cherry pick commit",
-		exec.Command(
-			"git", "cherry-pick", commit,
-		),
+		cmd,
 		true,
 	)
 	if err != nil {
 		cherryPickErr := err
+
 		_, err = runCommand(
 			"Abort cherry pick",
 			exec.Command(
@@ -105,7 +144,6 @@ func syncDiff(commit, branchName, baseRef, currentBranch string) error {
 	)
 	if err != nil {
 		return err
-		log.Fatalf("error: %v", err)
 	}
 
 	return nil
