@@ -110,6 +110,9 @@ var initCmd = &cobra.Command{
 		if err != nil {
 			log.Fatalf("error: %v", err)
 		}
+
+		// Setup git commit hook
+		// TODO
 	},
 }
 
