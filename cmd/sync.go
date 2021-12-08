@@ -333,7 +333,26 @@ var syncCmd = &cobra.Command{
 			if err != nil {
 				log.Fatalf("error: %v", err)
 			}
-			baseRef = parentDiff.Branch
+			// TODO check if diff has already been merged
+			// https://git-scm.com/docs/git-cherry
+			numCommits, err := runCommand(
+				"Num commits yet to be applied",
+				exec.Command(
+					"bash",
+					"-c",
+					fmt.Sprintf("git cherry origin/%s %s | grep '+' | wc -l", config.DefaultBranch, parentDiff.Branch),
+				),
+				true,
+			)
+			if err != nil {
+				log.Fatalf("error: %v", err)
+			}
+
+			if numCommits == "0" {
+				baseRef = fmt.Sprintf("origin/%s", config.DefaultBranch)
+			} else {
+				baseRef = parentDiff.Branch
+			}
 		} else {
 			baseRef = fmt.Sprintf("origin/%s", config.DefaultBranch)
 		}
