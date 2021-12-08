@@ -14,6 +14,103 @@ import (
 	"github.com/spf13/cobra"
 )
 
+func syncDiff(commit, branchName, baseRef, currentBranch string) error {
+	// Note: we don't care if this command fails
+	runCommand(
+		"Delete branch locally",
+		exec.Command(
+			"bash",
+			"-c",
+			fmt.Sprintf(
+				"git branch -D %s",
+				branchName,
+			),
+		),
+		true,
+	)
+
+	_, err := runCommand(
+		"Create new branch",
+		exec.Command(
+			"git", "branch", "--no-track", branchName, baseRef,
+		),
+		true,
+	)
+	if err != nil {
+		return err
+	}
+
+	_, err = runCommand(
+		"Switch to branch",
+		exec.Command(
+			"git", "switch", branchName,
+		),
+		true,
+	)
+	if err != nil {
+		return err
+	}
+
+	cherryPickMsg, err := runCommand(
+		"Cherry pick commit",
+		exec.Command(
+			"git", "cherry-pick", commit,
+		),
+		true,
+	)
+	if err != nil {
+		cherryPickErr := err
+		_, err = runCommand(
+			"Abort cherry pick",
+			exec.Command(
+				"git", "cherry-pick", "--abort",
+			),
+			true,
+		)
+		if err != nil {
+			return err
+		}
+
+		_, err = runCommand(
+			"Switch to branch",
+			exec.Command(
+				"git", "switch", currentBranch,
+			),
+			true,
+		)
+		if err != nil {
+			return err
+		}
+		log.Printf("cherry-pick failed: %v\n", cherryPickMsg)
+		return cherryPickErr
+	}
+
+	_, err = runCommand(
+		"Push branch",
+		exec.Command(
+			"git", "push", "origin", branchName, "--force",
+		),
+		false,
+	)
+	if err != nil {
+		return err
+	}
+
+	_, err = runCommand(
+		"Switch back to current branch",
+		exec.Command(
+			"git", "switch", currentBranch,
+		),
+		true,
+	)
+	if err != nil {
+		return err
+		log.Fatalf("error: %v", err)
+	}
+
+	return nil
+}
+
 var syncCmd = &cobra.Command{
 	Use:   "sync [commit]",
 	Short: "Sync a diff",
@@ -95,7 +192,7 @@ var syncCmd = &cobra.Command{
 
 		baseRef := fmt.Sprintf("origin/%s", config.DefaultBranch)
 
-		_, err = sqlDB.GetDiff(ctx, diffID)
+		diff, err := sqlDB.GetDiff(ctx, diffID)
 		if err != nil {
 			if err != sql.ErrNoRows {
 				log.Fatalf("error: %v", err)
@@ -123,93 +220,7 @@ var syncCmd = &cobra.Command{
 
 			log.Printf("Syncing %s to branch %s\n", commit, branchName)
 
-			// Note: we don't care if this command fails
-			runCommand(
-				"Delete branch locally",
-				exec.Command(
-					"bash",
-					"-c",
-					fmt.Sprintf(
-						"git branch -D %s",
-						branchName,
-					),
-				),
-				true,
-			)
-
-			_, err = runCommand(
-				"Create new branch",
-				exec.Command(
-					"git", "branch", "--no-track", branchName, baseRef,
-				),
-				true,
-			)
-			if err != nil {
-				log.Fatalf("error: %v", err)
-			}
-
-			_, err = runCommand(
-				"Switch to branch",
-				exec.Command(
-					"git", "switch", branchName,
-				),
-				true,
-			)
-			if err != nil {
-				log.Fatalf("error: %v", err)
-			}
-
-			cherryPickMsg, err := runCommand(
-				"Cherry pick commit",
-				exec.Command(
-					"git", "cherry-pick", commit,
-				),
-				true,
-			)
-			if err != nil {
-				_, err = runCommand(
-					"Abort cherry pick",
-					exec.Command(
-						"git", "cherry-pick", "--abort",
-					),
-					true,
-				)
-				if err != nil {
-					log.Fatalf("error: %v", err)
-				}
-
-				_, err = runCommand(
-					"Switch to branch",
-					exec.Command(
-						"git", "switch", currentBranch,
-					),
-					true,
-				)
-				if err != nil {
-					log.Fatalf("error: %v", err)
-				}
-				log.Printf("cherry-pick failed: %v\n", cherryPickMsg)
-				os.Exit(1)
-			}
-
-			_, err = runCommand(
-				"Push branch",
-				exec.Command(
-					"git", "push", "origin", branchName, "--force",
-				),
-				false,
-			)
-			if err != nil {
-				log.Fatalf("error: %v", err)
-			}
-
-			_, err = runCommand(
-				"Switch back to current branch",
-				exec.Command(
-					"git", "switch", currentBranch,
-				),
-				true,
-			)
+			err = syncDiff(commit, branchName, baseRef, currentBranch)
 			if err != nil {
 				log.Fatalf("error: %v", err)
 			}
@@ -227,6 +238,13 @@ var syncCmd = &cobra.Command{
 		}
 
 		log.Print("Diff already exists")
+
+		err = syncDiff(commit, diff.Branch, baseRef, currentBranch)
+		if err != nil {
+			log.Fatalf("error: %v", err)
+		}
+
+		// TODO sync any diffs that are stacked on top of this one
 
 		// diffID = fmt.Sprintf("D%s", randomString(5))
 
