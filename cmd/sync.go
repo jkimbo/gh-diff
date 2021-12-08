@@ -333,7 +333,8 @@ var syncCmd = &cobra.Command{
 			if err != nil {
 				log.Fatalf("error: %v", err)
 			}
-			// TODO check if diff has already been merged
+
+			// check if diff has already been merged
 			// https://git-scm.com/docs/git-cherry
 			numCommits, err := runCommand(
 				"Num commits yet to be applied",

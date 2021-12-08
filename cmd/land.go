@@ -69,111 +69,47 @@ var landCmd = &cobra.Command{
 		// Make sure that diff is not dependant on another diff that hasn't landed
 		// yet
 		if diff.StackedOn != "" {
-			fmt.Printf("Diff is stacked on %s and so can't be landed", diff.StackedOn)
+			parentDiff, err := sqlDB.GetDiff(ctx, diff.StackedOn)
+			if err != nil {
+				log.Fatalf("error: %v", err)
+			}
+
+			// check if diff has already been merged
+			// https://git-scm.com/docs/git-cherry
+			numCommits, err := runCommand(
+				"Num commits yet to be applied",
+				exec.Command(
+					"bash",
+					"-c",
+					fmt.Sprintf("git cherry origin/%s %s | grep '+' | wc -l", config.DefaultBranch, parentDiff.Branch),
+				),
+				true,
+			)
+			if err != nil {
+				log.Fatalf("error: %v", err)
+			}
+
+			if numCommits != "0" {
+				fmt.Printf("Diff is stacked on %s that hasn't landed yet\n", diff.StackedOn)
+				os.Exit(1)
+				return
+			}
+		}
+
+		if diff.PRNumber == "" {
+			fmt.Printf("Diff %s doesn't have a PR number\n", diff.ID)
 			os.Exit(1)
 			return
 		}
 
-		// Store current branch so that we can switch back to it later
-		currentBranch, err := runCommand(
-			"Get current branch",
-			exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD"),
-			true,
-		)
-		if err != nil {
-			log.Fatalf("err: %v", err)
-		}
-
-		// Checkout temporary branch
-		runCommand(
-			"Delete branch locally",
-			exec.Command(
-				"git", "branch", "-D", "tmp-main",
-			),
-			true,
-		)
-
-		baseRef := fmt.Sprintf("origin/%s", config.DefaultBranch)
-
+		// Merge PR
 		_, err = runCommand(
-			"Create new branch",
+			"Merge PR",
 			exec.Command(
-				"git", "branch", "tmp-main", baseRef,
+				"gh", "pr", "merge", diff.PRNumber, "--squash",
 			),
-			true,
+			false,
 		)
-		if err != nil {
-			log.Fatalf("err: %v", err)
-		}
-
-		_, err = runCommand(
-			"Switch to tmp-main",
-			exec.Command(
-				"git", "switch", "tmp-main",
-			),
-			true,
-		)
-		if err != nil {
-			log.Fatalf("err: %v", err)
-		}
-
-		// Merge branch
-		_, err = runCommand(
-			"Cherry pick commit",
-			exec.Command(
-				"git", "cherry-pick", commit,
-			),
-			true,
-		)
-		if err != nil {
-			cherryPickErr := err
-
-			_, err = runCommand(
-				"Abort cherry pick",
-				exec.Command(
-					"git", "cherry-pick", "--abort",
-				),
-				true,
-			)
-			if err != nil {
-				log.Fatalf("err: %v", err)
-			}
-
-			_, err = runCommand(
-				"Switch to branch",
-				exec.Command(
-					"git", "switch", currentBranch,
-				),
-				true,
-			)
-			if err != nil {
-				log.Fatalf("err: %v", err)
-			}
-			log.Fatalf("err: %v", cherryPickErr)
-		}
-
-		// Push branch
-		_, err = runCommand(
-			"Push changes",
-			exec.Command(
-				"git", "push", "origin", fmt.Sprintf("tmp-main:%s", config.DefaultBranch),
-			),
-			true,
-		)
-		if err != nil {
-			log.Fatalf("err: %v", err)
-		}
-
-		_, err = runCommand(
-			"Switch back to current branch",
-			exec.Command(
-				"git", "switch", currentBranch,
-			),
-			true,
-		)
-		if err != nil {
-			log.Fatalf("err: %v", err)
-		}
 
 		_, err = runCommand(
 			"Update main branch",
@@ -186,6 +122,7 @@ var landCmd = &cobra.Command{
 			log.Fatalf("err: %v", err)
 		}
 
+		// TODO sync all stacked on diffs
 	},
 }
 
