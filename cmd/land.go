@@ -66,6 +66,27 @@ var landCmd = &cobra.Command{
 			return
 		}
 
+		// check if diff has already been merged
+		// https://git-scm.com/docs/git-cherry
+		numCommits, err := runCommand(
+			"Num commits yet to be applied",
+			exec.Command(
+				"bash",
+				"-c",
+				fmt.Sprintf("git cherry origin/%s %s | grep '+' | wc -l", config.DefaultBranch, commit),
+			),
+			true,
+		)
+		if err != nil {
+			log.Fatalf("error: %v", err)
+		}
+
+		if numCommits == "0" {
+			fmt.Println("commit has already been merged")
+			os.Exit(1)
+			return
+		}
+
 		// Make sure that diff is not dependant on another diff that hasn't landed
 		// yet
 		if diff.StackedOn != "" {
