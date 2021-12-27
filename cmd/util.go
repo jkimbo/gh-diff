@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/cli/go-gh"
 )
 
 var seededRand *rand.Rand = rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -42,6 +44,7 @@ func runCommand(description string, cmd *exec.Cmd, capture bool) (string, error)
 		fmt.Println("#", output)
 
 		if err != nil {
+			fmt.Println("#", output)
 			fmt.Println("Error:", err)
 			return "", err
 		}
@@ -60,4 +63,14 @@ func runCommand(description string, cmd *exec.Cmd, capture bool) (string, error)
 	}
 
 	return string(out), nil
+}
+
+func runGHCommand(description string, args []string) (string, string, error) {
+	stdOut, stdErr, err := gh.Exec(args...)
+	if err != nil {
+		fmt.Println(err)
+		return stdOut.String(), stdErr.String(), nil
+	}
+
+	return stdOut.String(), stdErr.String(), nil
 }
