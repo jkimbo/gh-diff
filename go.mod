@@ -3,8 +3,9 @@ module github.com/jkimbo/stacked
 go 1.16
 
 require (
-	github.com/AlecAivazis/survey/v2 v2.3.2 // indirect
-	github.com/Masterminds/squirrel v1.5.2 // indirect
+	github.com/AlecAivazis/survey/v2 v2.3.2
+	github.com/Masterminds/squirrel v1.5.2
+	github.com/cli/go-gh v0.0.1
 	github.com/go-git/go-git/v5 v5.4.2
 	github.com/jmoiron/sqlx v1.3.4
 	github.com/mattn/go-sqlite3 v1.14.9
