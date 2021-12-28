@@ -55,7 +55,41 @@ func (diff *Diff) GetCommit(ctx context.Context) (string, error) {
 	// Note: this can and will change as diffs get rebased regularly
 
 	// Loop through all commits between HEAD and base branch
-	return "", nil
+	commits, err := util.RunCommand(
+		"Get commits",
+		exec.Command(
+			"git",
+			"rev-list",
+			"--reverse",
+			fmt.Sprintf("origin/%s...HEAD", diff.Config.DefaultBranch),
+		),
+		true,
+		false,
+	)
+	if err != nil {
+		return "", err
+	}
+
+	lines := strings.Split(commits, "\n")
+	var commit string
+	// TODO raise error if multiple diff ids found
+	for _, line := range lines {
+		diffID, err := diffIDFromCommit(line)
+		if err != nil {
+			// Ignore errors
+			continue
+		}
+		if diffID == diff.ID {
+			commit = line
+			break
+		}
+	}
+
+	if commit == "" {
+		return commit, fmt.Errorf("can't find commit for diff %s", diff.ID)
+	}
+
+	return commit, nil
 }
 
 // IsMerged returns true if the diff has already been merged
@@ -124,6 +158,11 @@ func LoadDiffFromCommit(ctx context.Context, db *db.SQLDB, config *Config, commi
 		return nil, fmt.Errorf("commit is missing a DiffID")
 	}
 
+	return LoadDiffFromID(ctx, db, config, diffID)
+}
+
+// LoadDiffFromID .
+func LoadDiffFromID(ctx context.Context, db *db.SQLDB, config *Config, diffID string) (*Diff, error) {
 	dbDiff, err := db.GetDiff(ctx, diffID)
 	if err != nil {
 		if err != sql.ErrNoRows {
@@ -133,14 +172,9 @@ func LoadDiffFromCommit(ctx context.Context, db *db.SQLDB, config *Config, commi
 	}
 
 	return &Diff{
-		ID:         dbDiff.ID,
+		ID:         diffID,
 		SQLDB:      db,
 		Config:     config,
 		DBInstance: dbDiff,
 	}, nil
-}
-
-// LoadDiffFromID .
-func LoadDiffFromID(ctx context.Context, db *db.SQLDB, config *Config, diffID string) (*Diff, error) {
-	return nil, nil
 }

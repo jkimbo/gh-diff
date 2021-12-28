@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"log"
 	"os"
@@ -91,22 +90,23 @@ var landCmd = &cobra.Command{
 			log.Fatalf("err: %v", err)
 		}
 
-		childDiff, err := sqlDB.GetChildDiff(ctx, diff.ID)
-		if err != nil {
-			if err != sql.ErrNoRows {
-				log.Fatalf("error: %v", err)
-			}
-		} else {
-			fmt.Println("Syncing child diffs")
-			childDiffID := childDiff.ID
+		// TODO
+		// childDiff, err := sqlDB.GetChildDiff(ctx, diff.ID)
+		// if err != nil {
+		// 	if err != sql.ErrNoRows {
+		// 		log.Fatalf("error: %v", err)
+		// 	}
+		// } else {
+		// 	fmt.Println("Syncing child diffs")
+		// 	childDiffID := childDiff.ID
 
-			// TODO sync all stacked on diffs
-			for childDiffID != "" {
-				// TODO Update PR base branch
-				// TODO Sync diff
-			}
-			fmt.Println("Syncing done")
-		}
+		// 	// TODO sync all stacked on diffs
+		// 	for childDiffID != "" {
+		// 		// TODO Update PR base branch
+		// 		// TODO Sync diff
+		// 	}
+		// 	fmt.Println("Syncing done")
+		// }
 	},
 }
 
