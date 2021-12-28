@@ -12,45 +12,49 @@ import (
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/jkimbo/stacked/db"
+	"github.com/jkimbo/stacked/util"
 	"github.com/spf13/cobra"
 )
 
 func syncDiff(commit, branchName, baseRef, currentBranch string) error {
-	commitDate, err := runCommand(
+	commitDate, err := util.RunCommand(
 		"Get commit date",
 		exec.Command(
 			"git", "show", "-s", "--format=%ci", commit,
 		),
 		true,
+		false,
 	)
 	if err != nil {
 		return err
 	}
 
-	committerName, err := runCommand(
+	committerName, err := util.RunCommand(
 		"Get committer name",
 		exec.Command(
 			"git", "show", "-s", "--format=%cn", commit,
 		),
 		true,
+		false,
 	)
 	if err != nil {
 		return err
 	}
 
-	committerEmail, err := runCommand(
+	committerEmail, err := util.RunCommand(
 		"Get committer email",
 		exec.Command(
 			"git", "show", "-s", "--format=%ce", commit,
 		),
 		true,
+		false,
 	)
 	if err != nil {
 		return err
 	}
 
 	// Note: we don't care if this command fails
-	runCommand(
+	util.RunCommand(
 		"Delete branch locally",
 		exec.Command(
 			"bash",
@@ -61,25 +65,28 @@ func syncDiff(commit, branchName, baseRef, currentBranch string) error {
 			),
 		),
 		true,
+		false,
 	)
 
-	_, err = runCommand(
+	_, err = util.RunCommand(
 		"Create new branch",
 		exec.Command(
 			"git", "branch", "--no-track", branchName, baseRef,
 		),
 		true,
+		false,
 	)
 	if err != nil {
 		return err
 	}
 
-	_, err = runCommand(
+	_, err = util.RunCommand(
 		"Switch to branch",
 		exec.Command(
 			"git", "switch", branchName,
 		),
 		true,
+		false,
 	)
 	if err != nil {
 		return err
@@ -92,31 +99,34 @@ func syncDiff(commit, branchName, baseRef, currentBranch string) error {
 	cmd.Env = append(cmd.Env, fmt.Sprintf("GIT_COMMITTER_EMAIL=%s", committerEmail))
 	cmd.Env = append(cmd.Env, fmt.Sprintf("GIT_COMMITTER_DATE=%s", commitDate))
 
-	cherryPickMsg, err := runCommand(
+	cherryPickMsg, err := util.RunCommand(
 		"Cherry pick commit",
 		cmd,
 		true,
+		false,
 	)
 	if err != nil {
 		cherryPickErr := err
 
-		_, err = runCommand(
+		_, err = util.RunCommand(
 			"Abort cherry pick",
 			exec.Command(
 				"git", "cherry-pick", "--abort",
 			),
 			true,
+			false,
 		)
 		if err != nil {
 			return err
 		}
 
-		_, err = runCommand(
+		_, err = util.RunCommand(
 			"Switch to branch",
 			exec.Command(
 				"git", "switch", currentBranch,
 			),
 			true,
+			false,
 		)
 		if err != nil {
 			return err
@@ -125,23 +135,25 @@ func syncDiff(commit, branchName, baseRef, currentBranch string) error {
 		return cherryPickErr
 	}
 
-	_, err = runCommand(
+	_, err = util.RunCommand(
 		"Push branch",
 		exec.Command(
 			"git", "push", "origin", branchName, "--force",
 		),
+		false,
 		false,
 	)
 	if err != nil {
 		return err
 	}
 
-	_, err = runCommand(
+	_, err = util.RunCommand(
 		"Switch back to current branch",
 		exec.Command(
 			"git", "switch", currentBranch,
 		),
 		true,
+		false,
 	)
 	if err != nil {
 		return err
@@ -152,7 +164,7 @@ func syncDiff(commit, branchName, baseRef, currentBranch string) error {
 
 func diffIDFromCommit(commit string) (string, error) {
 	// Find diff trailer
-	trailers, err := runCommand(
+	trailers, err := util.RunCommand(
 		"Get commit trailers",
 		exec.Command(
 			"bash",
@@ -160,6 +172,7 @@ func diffIDFromCommit(commit string) (string, error) {
 			fmt.Sprintf("git show -s --format=%%B %s | git interpret-trailers --parse", commit),
 		),
 		true,
+		false,
 	)
 	if err != nil {
 		return "", err
@@ -200,9 +213,10 @@ var syncCmd = &cobra.Command{
 		commit := args[0]
 
 		// Check that commit is valid
-		_, err := runCommand(
+		_, err := util.RunCommand(
 			"Checking commit is valid",
 			exec.Command("git", "cat-file", "-e", commit),
+			false,
 			false,
 		)
 		if err != nil {
@@ -234,10 +248,11 @@ var syncCmd = &cobra.Command{
 		}
 
 		// Store current branch so that we can switch back to it later
-		currentBranch, err := runCommand(
+		currentBranch, err := util.RunCommand(
 			"Get current branch",
 			exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD"),
 			true,
+			false,
 		)
 
 		diff, err := sqlDB.GetDiff(ctx, diffID)
@@ -248,7 +263,7 @@ var syncCmd = &cobra.Command{
 			fmt.Println("Commit hasn't been synced yet")
 
 			// Determine branch name
-			branchName, err := runCommand(
+			branchName, err := util.RunCommand(
 				"Generate branch name",
 				exec.Command(
 					"bash",
@@ -259,6 +274,7 @@ var syncCmd = &cobra.Command{
 					),
 				),
 				true,
+				false,
 			)
 			if err != nil {
 				log.Fatalf("error: %v", err)
@@ -266,12 +282,13 @@ var syncCmd = &cobra.Command{
 
 			var baseRef string
 			// TODO check parent commit to see if it's also a diff
-			parentCommit, err := runCommand(
+			parentCommit, err := util.RunCommand(
 				"Get parent commit",
 				exec.Command(
 					"git", "rev-parse", fmt.Sprintf("%s^", commit),
 				),
 				true,
+				false,
 			)
 			if err != nil {
 				log.Fatalf("error: %v", err)
@@ -336,7 +353,7 @@ var syncCmd = &cobra.Command{
 
 			// check if diff has already been merged
 			// https://git-scm.com/docs/git-cherry
-			numCommits, err := runCommand(
+			numCommits, err := util.RunCommand(
 				"Num commits yet to be applied",
 				exec.Command(
 					"bash",
@@ -344,6 +361,7 @@ var syncCmd = &cobra.Command{
 					fmt.Sprintf("git cherry origin/%s %s | grep '+' | wc -l", config.DefaultBranch, parentDiff.Branch),
 				),
 				true,
+				false,
 			)
 			if err != nil {
 				log.Fatalf("error: %v", err)

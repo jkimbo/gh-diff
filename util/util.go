@@ -1,4 +1,4 @@
-package cmd
+package util
 
 import (
 	"fmt"
@@ -13,7 +13,7 @@ import (
 
 var seededRand *rand.Rand = rand.New(rand.NewSource(time.Now().UnixNano()))
 
-func randomString(n int) string {
+func RandomString(n int) string {
 	letters := "abcdefghijklmnopqrstuvwxyz1234567890"
 	b := make([]byte, n)
 	for i := range b {
@@ -31,9 +31,11 @@ func printCmd(description string, cmd *exec.Cmd) {
 	fmt.Println("")
 }
 
-func runCommand(description string, cmd *exec.Cmd, capture bool) (string, error) {
+func RunCommand(description string, cmd *exec.Cmd, capture bool, verbose bool) (string, error) {
 	// TODO only print when verbose flag is set
-	printCmd(description, cmd)
+	if verbose == true {
+		printCmd(description, cmd)
+	}
 	var out []byte
 	var err error
 	if capture {
@@ -41,7 +43,9 @@ func runCommand(description string, cmd *exec.Cmd, capture bool) (string, error)
 
 		output := string(out)
 		output = strings.TrimSuffix(output, "\n")
-		fmt.Println("#", output)
+		if verbose == true {
+			fmt.Println("#", output)
+		}
 
 		if err != nil {
 			fmt.Println("#", output)
@@ -65,7 +69,7 @@ func runCommand(description string, cmd *exec.Cmd, capture bool) (string, error)
 	return string(out), nil
 }
 
-func runGHCommand(description string, args []string) (string, string, error) {
+func RunGHCommand(description string, args []string) (string, string, error) {
 	stdOut, stdErr, err := gh.Exec(args...)
 	if err != nil {
 		fmt.Println(err)
