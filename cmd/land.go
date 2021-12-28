@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 
 	"github.com/jkimbo/stacked/db"
+	"github.com/jkimbo/stacked/diff"
+	"github.com/jkimbo/stacked/util"
 	"github.com/spf13/cobra"
 )
 
@@ -21,128 +23,90 @@ var landCmd = &cobra.Command{
 		ctx := context.Background()
 		commit := args[0]
 
-		// Check that commit is valid
-		_, err := runCommand(
-			"Checking commit is valid",
-			exec.Command("git", "cat-file", "-e", commit),
-			false,
-		)
-		if err != nil {
-			log.Fatalf("err: %v", err)
-			os.Exit(1)
-		}
-
-		fmt.Printf("Landing commit: %s", commit)
-
-		// Find diff trailer
-		diffID, err := diffIDFromCommit(commit)
-		if err != nil {
-			log.Fatalf("err: %s", err)
-		}
-
-		if diffID == "" {
-			fmt.Println("Commit is missing a DiffID")
-			os.Exit(1)
-			return
-		}
-
 		sqlDB, err := db.NewDB(ctx, filepath.Join(".stacked", "main.db"))
 		if err != nil {
 			log.Fatalf("Unable to connect to database: %v\n", err)
 		}
 
-		config, err := loadConfig()
+		config, err := diff.LoadConfig()
 		if err != nil {
 			log.Fatalf("err: %v\n", err)
 		}
 
-		diff, err := sqlDB.GetDiff(ctx, diffID)
+		diff, err := diff.LoadDiffFromCommit(ctx, sqlDB, config, commit)
 		if err != nil {
-			if err != sql.ErrNoRows {
-				log.Fatalf("error: %v", err)
-			}
-			fmt.Println("Commit hasn't been synced yet")
-			os.Exit(1)
-			return
+			log.Fatalf("err: %v", err)
 		}
 
-		// check if diff has already been merged
-		// https://git-scm.com/docs/git-cherry
-		numCommits, err := runCommand(
-			"Num commits yet to be applied",
-			exec.Command(
-				"bash",
-				"-c",
-				fmt.Sprintf("git cherry origin/%s %s | grep '+' | wc -l", config.DefaultBranch, commit),
-			),
-			true,
-		)
+		isMerged, err := diff.IsMerged(ctx)
 		if err != nil {
-			log.Fatalf("error: %v", err)
+			log.Fatalf("err: %v", err)
 		}
-
-		if numCommits == "0" {
-			fmt.Println("commit has already been merged")
-			os.Exit(1)
-			return
+		if isMerged == true {
+			log.Fatalf("commit already landed")
 		}
 
 		// Make sure that diff is not dependant on another diff that hasn't landed
 		// yet
-		if diff.StackedOn != "" {
-			parentDiff, err := sqlDB.GetDiff(ctx, diff.StackedOn)
+		stackedOnDiff, err := diff.StackedOn(ctx)
+		if err != nil {
+			log.Fatalf("error: %v", err)
+		}
+		if stackedOnDiff != nil {
+			isMerged, err := stackedOnDiff.IsMerged(ctx)
 			if err != nil {
 				log.Fatalf("error: %v", err)
 			}
-
-			// check if diff has already been merged
-			// https://git-scm.com/docs/git-cherry
-			numCommits, err := runCommand(
-				"Num commits yet to be applied",
-				exec.Command(
-					"bash",
-					"-c",
-					fmt.Sprintf("git cherry origin/%s %s | grep '+' | wc -l", config.DefaultBranch, parentDiff.Branch),
-				),
-				true,
-			)
-			if err != nil {
-				log.Fatalf("error: %v", err)
-			}
-
-			if numCommits != "0" {
-				fmt.Printf("Diff is stacked on %s that hasn't landed yet\n", diff.StackedOn)
+			if !isMerged {
+				fmt.Printf("Diff is stacked on %s that hasn't landed yet\n", diff.DBInstance.StackedOn)
 				os.Exit(1)
-				return
 			}
 		}
 
-		if diff.PRNumber == "" {
+		if diff.DBInstance.PRNumber == "" {
 			fmt.Printf("Diff %s doesn't have a PR number\n", diff.ID)
 			os.Exit(1)
 			return
 		}
 
+		fmt.Printf("Landing commit: %s", commit)
+
 		// Merge PR
-		_, _, err = runGHCommand(
+		_, _, err = util.RunGHCommand(
 			"Merge PR",
 			[]string{
-				"pr", "merge", diff.PRNumber, "--squash",
+				"pr", "merge", diff.DBInstance.PRNumber, "--squash",
 			},
 		)
 
-		_, err = runCommand(
+		_, err = util.RunCommand(
 			"Update main branch",
 			exec.Command(
 				"git", "pull", "origin", config.DefaultBranch, "--rebase",
 			),
 			true,
+			false,
 		)
 		if err != nil {
 			log.Fatalf("err: %v", err)
 		}
 
-		// TODO sync all stacked on diffs
+		childDiff, err := sqlDB.GetChildDiff(ctx, diff.ID)
+		if err != nil {
+			if err != sql.ErrNoRows {
+				log.Fatalf("error: %v", err)
+			}
+		} else {
+			fmt.Println("Syncing child diffs")
+			childDiffID := childDiff.ID
+
+			// TODO sync all stacked on diffs
+			for childDiffID != "" {
+				// TODO Update PR base branch
+				// TODO Sync diff
+			}
+			fmt.Println("Syncing done")
+		}
 	},
 }
 
