@@ -31,6 +31,7 @@ type Diff struct {
 type DB interface {
 	GetDiff(ctx context.Context, diffID string) (*Diff, error)
 	CreateDiff(ctx context.Context, diff *Diff) error
+	GetChildDiff(ctx context.Context, diffID string) (*Diff, error)
 }
 
 // SQLDB .
@@ -89,6 +90,20 @@ func (db *SQLDB) CreateDiff(ctx context.Context, diff *Diff) error {
 
 	_, err = db.DB.ExecContext(ctx, query, args...)
 	return err
+}
+
+// GetChildDiff .
+func (db *SQLDB) GetChildDiff(ctx context.Context, diffID string) (*Diff, error) {
+	query, args, err := db.StatementBuilder.Select("*").From("diffs").
+		Where("stacked_on = ?", diffID).ToSql()
+	if err != nil {
+		return nil, err
+	}
+	var diff Diff
+	if err := db.DB.Get(&diff, query, args...); err != nil {
+		return nil, err
+	}
+	return &diff, nil
 }
 
 // Init setups up the database schema

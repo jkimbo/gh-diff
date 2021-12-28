@@ -10,34 +10,12 @@ import (
 	"path/filepath"
 
 	"github.com/jkimbo/stacked/db"
+	"github.com/jkimbo/stacked/diff"
+	"github.com/jkimbo/stacked/util"
 	_ "github.com/mattn/go-sqlite3" // so that sqlx works with sqlite
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
-
-type Config struct {
-	DefaultBranch string `yaml:"default_branch"`
-}
-
-var config *Config
-
-func loadConfig() (*Config, error) {
-	if config == nil {
-		config = &Config{}
-		file, err := os.Open(filepath.Join(".stacked", "config.yaml"))
-		if err != nil {
-			return nil, err
-		}
-		defer file.Close()
-
-		d := yaml.NewDecoder(file)
-		if err := d.Decode(&config); err != nil {
-			return nil, err
-		}
-	}
-
-	return config, nil
-}
 
 var initCmd = &cobra.Command{
 	Use:   "init",
@@ -77,12 +55,12 @@ var initCmd = &cobra.Command{
 
 		// Get base branch name
 		gitCmd := exec.Command("gh", "repo", "view", "--json=defaultBranchRef", "--jq=.defaultBranchRef.name")
-		defaultBranch, err := runCommand("Get HEAD branch name", gitCmd, true)
+		defaultBranch, err := util.RunCommand("Get HEAD branch name", gitCmd, true, false)
 		if err != nil {
 			log.Fatalf(err.Error())
 		}
 
-		config := &Config{
+		config := &diff.Config{
 			DefaultBranch: defaultBranch,
 		}
 
@@ -93,9 +71,10 @@ var initCmd = &cobra.Command{
 		// }
 
 		// Set pull.rebase to true
-		_, err = runCommand(
+		_, err = util.RunCommand(
 			"Set config pull.rebase to true",
 			exec.Command("git", "config", "pull.rebase", "true"),
+			false,
 			false,
 		)
 		if err != nil {
