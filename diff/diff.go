@@ -178,3 +178,42 @@ func LoadDiffFromID(ctx context.Context, db *db.SQLDB, config *Config, diffID st
 		DBInstance: dbDiff,
 	}, nil
 }
+
+// NewDiffFromCommit .
+func NewDiffFromCommit(ctx context.Context, sqlDB *db.SQLDB, config *Config, commit string) (*Diff, error) {
+	// Check that commit is valid
+	_, err := util.RunCommand(
+		"Checking commit is valid",
+		exec.Command("git", "cat-file", "-e", commit),
+		false,
+		false,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Find diff trailer
+	diffID, err := diffIDFromCommit(commit)
+	if err != nil {
+		return nil, err
+	}
+
+	if diffID == "" {
+		return nil, fmt.Errorf("commit is missing a DiffID")
+	}
+
+	var dbDiff *db.Diff
+	dbDiff, err = sqlDB.GetDiff(ctx, diffID)
+	if err != nil {
+		if err != sql.ErrNoRows {
+			return nil, err
+		}
+	}
+
+	return &Diff{
+		ID:         diffID,
+		SQLDB:      sqlDB,
+		Config:     config,
+		DBInstance: dbDiff,
+	}, nil
+}

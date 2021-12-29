@@ -5,13 +5,13 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/jkimbo/stacked/db"
+	"github.com/jkimbo/stacked/diff"
 	"github.com/jkimbo/stacked/util"
 	"github.com/spf13/cobra"
 )
@@ -212,40 +212,22 @@ var syncCmd = &cobra.Command{
 		ctx := context.Background()
 		commit := args[0]
 
-		// Check that commit is valid
-		_, err := util.RunCommand(
-			"Checking commit is valid",
-			exec.Command("git", "cat-file", "-e", commit),
-			false,
-			false,
-		)
-		if err != nil {
-			os.Exit(1)
-		}
-
-		fmt.Println("Syncing diff:", commit)
-
-		// Find diff trailer
-		diffID, err := diffIDFromCommit(commit)
-		if err != nil {
-			log.Fatalf("err: %s", err)
-		}
-
-		if diffID == "" {
-			fmt.Println("Commit is missing a DiffID")
-			os.Exit(1)
-			return
-		}
-
 		sqlDB, err := db.NewDB(ctx, filepath.Join(".stacked", "main.db"))
 		if err != nil {
 			log.Fatalf("Unable to connect to database: %v\n", err)
 		}
 
-		config, err := loadConfig()
+		config, err := diff.LoadConfig()
 		if err != nil {
 			log.Fatalf("err: %v\n", err)
 		}
+
+		diff, err := diff.NewDiffFromCommit(ctx, sqlDB, config, commit)
+		if err != nil {
+			log.Fatalf("err: %v\n", err)
+		}
+
+		fmt.Println("Syncing diff:", commit)
 
 		// Store current branch so that we can switch back to it later
 		currentBranch, err := util.RunCommand(
@@ -254,12 +236,11 @@ var syncCmd = &cobra.Command{
 			true,
 			false,
 		)
-
-		diff, err := sqlDB.GetDiff(ctx, diffID)
 		if err != nil {
-			if err != sql.ErrNoRows {
-				log.Fatalf("error: %v", err)
-			}
+			log.Fatalf("err: %v\n", err)
+		}
+
+		if diff.DBInstance == nil {
 			fmt.Println("Commit hasn't been synced yet")
 
 			// Determine branch name
@@ -331,7 +312,7 @@ var syncCmd = &cobra.Command{
 
 			// save diff
 			err = sqlDB.CreateDiff(ctx, &db.Diff{
-				ID:        diffID,
+				ID:        diff.ID,
 				Branch:    branchName,
 				StackedOn: stackedOn,
 			})
@@ -345,8 +326,8 @@ var syncCmd = &cobra.Command{
 		log.Print("Diff already exists")
 
 		var baseRef string
-		if diff.StackedOn != "" {
-			parentDiff, err := sqlDB.GetDiff(ctx, diff.StackedOn)
+		if diff.DBInstance.StackedOn != "" {
+			parentDiff, err := sqlDB.GetDiff(ctx, diff.DBInstance.StackedOn)
 			if err != nil {
 				log.Fatalf("error: %v", err)
 			}
@@ -376,7 +357,7 @@ var syncCmd = &cobra.Command{
 			baseRef = fmt.Sprintf("origin/%s", config.DefaultBranch)
 		}
 
-		err = syncDiff(commit, diff.Branch, baseRef, currentBranch)
+		err = syncDiff(commit, diff.DBInstance.Branch, baseRef, currentBranch)
 		if err != nil {
 			log.Fatalf("error: %v", err)
 		}
