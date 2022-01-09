@@ -282,6 +282,7 @@ var syncCmd = &cobra.Command{
 				log.Fatalf("error: %v", err)
 			}
 
+			var stackedOn string
 			if parentDiffID != "" {
 				parentDiff, err := sqlDB.GetDiff(ctx, parentDiffID)
 				if err != nil {
@@ -298,6 +299,9 @@ var syncCmd = &cobra.Command{
 						},
 					}
 					survey.AskOne(prompt, &baseRef)
+					if baseRef == parentDiff.Branch {
+						stackedOn = parentDiff.ID
+					}
 				}
 			}
 
@@ -310,8 +314,9 @@ var syncCmd = &cobra.Command{
 
 			// save diff
 			err = sqlDB.CreateDiff(ctx, &db.Diff{
-				ID:     diffID,
-				Branch: branchName,
+				ID:        diffID,
+				Branch:    branchName,
+				StackedOn: stackedOn,
 			})
 			if err != nil {
 				log.Fatalf("error: %v", err)
