@@ -7,13 +7,14 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/jkimbo/stacked/db"
-	"github.com/jkimbo/stacked/util"
+	"github.com/jkimbo/stacked/internal/db"
+	"github.com/jkimbo/stacked/internal/client"
+	"github.com/jkimbo/stacked/utils"
 )
 
 func diffIDFromCommit(commit string) (string, error) {
 	// Find diff trailer
-	trailers, err := util.RunCommand(
+	trailers, err := utils.RunCommand(
 		"Get commit trailers",
 		exec.Command(
 			"bash",
@@ -44,9 +45,8 @@ func diffIDFromCommit(commit string) (string, error) {
 // Diff .
 type Diff struct {
 	ID         string
-	SQLDB      *db.SQLDB
-	Config     *Config
 	DBInstance *db.Diff
+	Client *client.StackedClient
 }
 
 // GetCommit .
@@ -55,13 +55,13 @@ func (diff *Diff) GetCommit(ctx context.Context) (string, error) {
 	// Note: this can and will change as diffs get rebased regularly
 
 	// Loop through all commits between HEAD and base branch
-	commits, err := util.RunCommand(
+	commits, err := utils.RunCommand(
 		"Get commits",
 		exec.Command(
 			"git",
 			"rev-list",
 			"--reverse",
-			fmt.Sprintf("origin/%s...HEAD", diff.Config.DefaultBranch),
+			fmt.Sprintf("origin/%s...HEAD", diff.Client.Config.DefaultBranch),
 		),
 		true,
 		false,
@@ -101,12 +101,12 @@ func (diff *Diff) IsMerged(ctx context.Context) (bool, error) {
 
 	// check if diff has already been merged
 	// https://git-scm.com/docs/git-cherry
-	numCommits, err := util.RunCommand(
+	numCommits, err := utils.RunCommand(
 		"Num commits yet to be applied",
 		exec.Command(
 			"bash",
 			"-c",
-			fmt.Sprintf("git cherry origin/%s %s | grep '+' | wc -l", diff.Config.DefaultBranch, commit),
+			fmt.Sprintf("git cherry origin/%s %s | grep '+' | wc -l", diff.Client.Config.DefaultBranch, commit),
 		),
 		true,
 		false,
@@ -128,7 +128,7 @@ func (diff *Diff) StackedOn(ctx context.Context) (*Diff, error) {
 		return nil, nil
 	}
 
-	stackedOnDiff, err := LoadDiffFromID(ctx, diff.SQLDB, diff.Config, diff.ID)
+	stackedOnDiff, err := LoadDiffFromID(ctx, diff.Client, diff.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -136,9 +136,9 @@ func (diff *Diff) StackedOn(ctx context.Context) (*Diff, error) {
 }
 
 // LoadDiffFromCommit .
-func LoadDiffFromCommit(ctx context.Context, db *db.SQLDB, config *Config, commit string) (*Diff, error) {
+func LoadDiffFromCommit(ctx context.Context, c *client.StackedClient, commit string) (*Diff, error) {
 	// Check that commit is valid
-	_, err := util.RunCommand(
+	_, err := utils.RunCommand(
 		"Checking commit is valid",
 		exec.Command("git", "cat-file", "-e", commit),
 		false,
@@ -158,12 +158,12 @@ func LoadDiffFromCommit(ctx context.Context, db *db.SQLDB, config *Config, commi
 		return nil, fmt.Errorf("commit is missing a DiffID")
 	}
 
-	return LoadDiffFromID(ctx, db, config, diffID)
+	return LoadDiffFromID(ctx, c, diffID)
 }
 
 // LoadDiffFromID .
-func LoadDiffFromID(ctx context.Context, db *db.SQLDB, config *Config, diffID string) (*Diff, error) {
-	dbDiff, err := db.GetDiff(ctx, diffID)
+func LoadDiffFromID(ctx context.Context, c *client.StackedClient, diffID string) (*Diff, error) {
+	dbDiff, err := c.SQLDB.GetDiff(ctx, diffID)
 	if err != nil {
 		if err != sql.ErrNoRows {
 			return nil, err
@@ -173,16 +173,14 @@ func LoadDiffFromID(ctx context.Context, db *db.SQLDB, config *Config, diffID st
 
 	return &Diff{
 		ID:         diffID,
-		SQLDB:      db,
-		Config:     config,
 		DBInstance: dbDiff,
 	}, nil
 }
 
 // NewDiffFromCommit .
-func NewDiffFromCommit(ctx context.Context, sqlDB *db.SQLDB, config *Config, commit string) (*Diff, error) {
+func NewDiffFromCommit(ctx context.Context, c *client.StackedClient, commit string) (*Diff, error) {
 	// Check that commit is valid
-	_, err := util.RunCommand(
+	_, err := utils.RunCommand(
 		"Checking commit is valid",
 		exec.Command("git", "cat-file", "-e", commit),
 		false,
@@ -203,7 +201,7 @@ func NewDiffFromCommit(ctx context.Context, sqlDB *db.SQLDB, config *Config, com
 	}
 
 	var dbDiff *db.Diff
-	dbDiff, err = sqlDB.GetDiff(ctx, diffID)
+	dbDiff, err = c.SQLDB.GetDiff(ctx, diffID)
 	if err != nil {
 		if err != sql.ErrNoRows {
 			return nil, err
@@ -212,8 +210,7 @@ func NewDiffFromCommit(ctx context.Context, sqlDB *db.SQLDB, config *Config, com
 
 	return &Diff{
 		ID:         diffID,
-		SQLDB:      sqlDB,
-		Config:     config,
 		DBInstance: dbDiff,
+		Client: c,
 	}, nil
 }

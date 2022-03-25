@@ -11,8 +11,8 @@ const SCHEMA = `
 	CREATE TABLE IF NOT EXISTS diffs (
 		id TEXT PRIMARY KEY,
 		branch TEXT,
-		pr_number TEXT NULL,
-		stacked_on TEXT NULL
+		pr_number TEXT,
+		stacked_on TEXT
 	);
 	CREATE UNIQUE INDEX IF NOT EXISTS idx_diffs_id ON diffs (id);
 `

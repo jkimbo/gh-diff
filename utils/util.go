@@ -1,4 +1,4 @@
-package util
+package utils
 
 import (
 	"fmt"
@@ -67,6 +67,15 @@ func RunCommand(description string, cmd *exec.Cmd, capture bool, verbose bool) (
 	}
 
 	return string(out), nil
+}
+
+func MustRunCommand(description string, cmd *exec.Cmd, capture bool, verbose bool) string {
+	output, err := RunCommand(description, cmd, capture, verbose)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	return output
 }
 
 func RunGHCommand(description string, args []string) (string, string, error) {
