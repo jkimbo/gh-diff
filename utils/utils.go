@@ -48,6 +48,8 @@ func RunCommand(description string, cmd *exec.Cmd, capture bool, verbose bool) (
 		}
 
 		if err != nil {
+			fmt.Printf("# cmd err: %s\n", description)
+			fmt.Printf("# cmd: %v\n", cmd.Args)
 			fmt.Println("#", output)
 			fmt.Println("Error:", err)
 			return "", err

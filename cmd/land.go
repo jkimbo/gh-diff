@@ -6,11 +6,10 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"path/filepath"
 
-	"github.com/jkimbo/stacked/db"
-	"github.com/jkimbo/stacked/diff"
-	"github.com/jkimbo/stacked/util"
+	"github.com/jkimbo/stacked/internal/client"
+	"github.com/jkimbo/stacked/internal/diff"
+	"github.com/jkimbo/stacked/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -22,22 +21,17 @@ var landCmd = &cobra.Command{
 		ctx := context.Background()
 		commit := args[0]
 
-		sqlDB, err := db.NewDB(ctx, filepath.Join(".stacked", "main.db"))
-		if err != nil {
-			log.Fatalf("Unable to connect to database: %v\n", err)
-		}
-
-		config, err := diff.LoadConfig()
+		c, err := client.NewStackedClient(ctx)
 		if err != nil {
 			log.Fatalf("err: %v\n", err)
 		}
 
-		diff, err := diff.LoadDiffFromCommit(ctx, sqlDB, config, commit)
+		diff, err := diff.NewDiffFromCommit(ctx, c, commit)
 		if err != nil {
 			log.Fatalf("err: %v", err)
 		}
 
-		isMerged, err := diff.IsMerged(ctx)
+		isMerged, err := diff.IsMerged()
 		if err != nil {
 			log.Fatalf("err: %v", err)
 		}
@@ -52,7 +46,7 @@ var landCmd = &cobra.Command{
 			log.Fatalf("error: %v", err)
 		}
 		if stackedOnDiff != nil {
-			isMerged, err := stackedOnDiff.IsMerged(ctx)
+			isMerged, err := stackedOnDiff.IsMerged()
 			if err != nil {
 				log.Fatalf("error: %v", err)
 			}
@@ -71,17 +65,17 @@ var landCmd = &cobra.Command{
 		fmt.Printf("Landing commit: %s", commit)
 
 		// Merge PR
-		_, _, err = util.RunGHCommand(
+		_, _, err = utils.RunGHCommand(
 			"Merge PR",
 			[]string{
 				"pr", "merge", diff.DBInstance.PRNumber, "--squash",
 			},
 		)
 
-		_, err = util.RunCommand(
+		_, err = utils.RunCommand(
 			"Update main branch",
 			exec.Command(
-				"git", "pull", "origin", config.DefaultBranch, "--rebase",
+				"git", "pull", "origin", c.DefaultBranch(), "--rebase",
 			),
 			true,
 			false,

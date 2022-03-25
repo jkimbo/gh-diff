@@ -9,9 +9,9 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/jkimbo/stacked/db"
-	"github.com/jkimbo/stacked/diff"
-	"github.com/jkimbo/stacked/util"
+	"github.com/jkimbo/stacked/internal/config"
+	"github.com/jkimbo/stacked/internal/db"
+	"github.com/jkimbo/stacked/utils"
 	_ "github.com/mattn/go-sqlite3" // so that sqlx works with sqlite
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -34,13 +34,13 @@ var initCmd = &cobra.Command{
 
 		if _, err := os.Stat(".stacked/main.db"); errors.Is(err, os.ErrNotExist) {
 			// Create DB file
-			log.Println("Creating main.db...")
+			fmt.Println("Creating main.db...")
 			file, err := os.Create(filepath.Join(".stacked", "main.db"))
 			if err != nil {
 				log.Fatal(err.Error())
 			}
 			file.Close()
-			log.Println("main.db created")
+			fmt.Println("main.db created")
 		}
 
 		db, err := db.NewDB(ctx, filepath.Join(".stacked", "main.db"))
@@ -55,12 +55,12 @@ var initCmd = &cobra.Command{
 
 		// Get base branch name
 		gitCmd := exec.Command("gh", "repo", "view", "--json=defaultBranchRef", "--jq=.defaultBranchRef.name")
-		defaultBranch, err := util.RunCommand("Get HEAD branch name", gitCmd, true, false)
+		defaultBranch, err := utils.RunCommand("Get HEAD branch name", gitCmd, true, false)
 		if err != nil {
 			log.Fatalf(err.Error())
 		}
 
-		config := &diff.Config{
+		config := &config.Config{
 			DefaultBranch: defaultBranch,
 		}
 
@@ -71,7 +71,7 @@ var initCmd = &cobra.Command{
 		// }
 
 		// Set pull.rebase to true
-		_, err = util.RunCommand(
+		_, err = utils.RunCommand(
 			"Set config pull.rebase to true",
 			exec.Command("git", "config", "pull.rebase", "true"),
 			false,

@@ -14,6 +14,10 @@ type StackedClient struct {
 	Config *config.Config
 }
 
+func (c *StackedClient) DefaultBranch() string {
+	return c.Config.DefaultBranch
+}
+
 func NewStackedClient(ctx context.Context) (*StackedClient, error) {
 	sqlDB, err := db.NewDB(ctx, filepath.Join(".stacked", "main.db"))
 	if err != nil {
