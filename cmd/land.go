@@ -103,12 +103,11 @@ var landCmd = &cobra.Command{
 		}
 
 		// Merge PR
-		_, err = runCommand(
+		_, _, err = runGHCommand(
 			"Merge PR",
-			exec.Command(
-				"gh", "pr", "merge", diff.PRNumber, "--squash",
-			),
-			false,
+			[]string{
+				"pr", "merge", diff.PRNumber, "--squash",
+			},
 		)
 
 		_, err = runCommand(
