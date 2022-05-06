@@ -4,10 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/jkimbo/stacked/internal/config"
 	"github.com/jkimbo/stacked/internal/db"
@@ -26,13 +30,20 @@ var initCmd = &cobra.Command{
 
 		ctx := context.Background()
 
-		newpath := filepath.Join(".", ".stacked")
-		err := os.MkdirAll(newpath, os.ModePerm)
+		// find root path
+		path, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
+		if err != nil {
+			log.Fatalf("cannot find git folder")
+		}
+		rootPath := strings.TrimSpace(string(path))
+
+		newpath := filepath.Join(rootPath, ".stacked")
+		err = os.MkdirAll(newpath, os.ModePerm)
 		if err != nil {
 			log.Fatalf("Unable to create .stacked dir")
 		}
 
-		if _, err := os.Stat(".stacked/main.db"); errors.Is(err, os.ErrNotExist) {
+		if _, err := os.Stat(filepath.Join(rootPath, ".stacked", "main.db")); errors.Is(err, os.ErrNotExist) {
 			// Create DB file
 			fmt.Println("Creating main.db...")
 			file, err := os.Create(filepath.Join(".stacked", "main.db"))
@@ -43,7 +54,7 @@ var initCmd = &cobra.Command{
 			fmt.Println("main.db created")
 		}
 
-		db, err := db.NewDB(ctx, filepath.Join(".stacked", "main.db"))
+		db, err := db.NewDB(ctx, filepath.Join(rootPath, ".stacked", "main.db"))
 		if err != nil {
 			log.Fatalf("Unable to connect to database: %v\n", err)
 		}
@@ -85,13 +96,32 @@ var initCmd = &cobra.Command{
 		if err != nil {
 			log.Fatalf("error: %v", err)
 		}
-		err = os.WriteFile(filepath.Join(".stacked", "config.yaml"), d, 0644)
+		err = os.WriteFile(filepath.Join(rootPath, ".stacked", "config.yaml"), d, 0644)
 		if err != nil {
 			log.Fatalf("error: %v", err)
 		}
 
 		// Setup git commit hook
-		// TODO
+		commitMsgHookPath := filepath.Join(rootPath, ".git", "hooks", "commit-msg")
+		if _, err := os.Stat(commitMsgHookPath); err == nil {
+			log.Fatalf("commit-msg hook already exists")
+		}
+
+		resp, err := http.Get("https://raw.githubusercontent.com/jkimbo/stacked/main/hooks/commit-msg")
+		if err != nil {
+			log.Fatalf("err downloading hook: %s", err)
+		}
+		defer resp.Body.Close()
+
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		err = ioutil.WriteFile(commitMsgHookPath, bodyBytes, 0755)
+		if err != nil {
+			log.Fatalf("err writing hook: %s", err)
+		}
 	},
 }
 
