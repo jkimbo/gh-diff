@@ -4,10 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"os/exec"
 	"strings"
 
 	"github.com/AlecAivazis/survey/v2"
+	"github.com/AlecAivazis/survey/v2/terminal"
 	"github.com/jkimbo/stacked/internal/client"
 	"github.com/jkimbo/stacked/internal/db"
 	"github.com/jkimbo/stacked/utils"
@@ -121,7 +123,13 @@ func (diff *Diff) Sync(ctx context.Context) error {
 						fmt.Sprintf("origin/%s", diff.Client.DefaultBranch()),
 					},
 				}
-				survey.AskOne(prompt, &baseRef)
+				err := survey.AskOne(prompt, &baseRef)
+				if err != nil {
+					if err == terminal.InterruptErr {
+						log.Fatal("interrupted")
+					}
+					log.Fatalf("err: %s", err)
+				}
 				if baseRef == parentDiff.DBInstance.Branch {
 					stackedOn = parentDiff.ID
 				}
