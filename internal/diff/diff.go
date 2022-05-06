@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	"github.com/AlecAivazis/survey/v2"
-	"github.com/jkimbo/stacked/internal/db"
 	"github.com/jkimbo/stacked/internal/client"
+	"github.com/jkimbo/stacked/internal/db"
 	"github.com/jkimbo/stacked/utils"
 )
 
@@ -46,9 +46,9 @@ func diffIDFromCommit(commit string) (string, error) {
 // Diff .
 type Diff struct {
 	ID         string
-	Commit string
+	Commit     string
 	DBInstance *db.Diff
-	Client *client.StackedClient
+	Client     *client.StackedClient
 }
 
 // Sync .
@@ -163,7 +163,7 @@ func (diff *Diff) Sync(ctx context.Context) error {
 				return fmt.Errorf("stacked diff hasn't been synced")
 			}
 
-			fmt.Printf("stacked on %s", stackedOnDiff.DBInstance.ID)
+			fmt.Printf("stacked on %s\n", stackedOnDiff.DBInstance.ID)
 			baseRef = stackedOnDiff.DBInstance.Branch
 		}
 	}
@@ -172,6 +172,8 @@ func (diff *Diff) Sync(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
+	// Create Github PR if there isn't one
 
 	return nil
 }
@@ -471,7 +473,7 @@ func NewDiffFromID(ctx context.Context, c *client.StackedClient, diffID string) 
 	return &Diff{
 		ID:         diffID,
 		DBInstance: dbDiff,
-		Client: c,
+		Client:     c,
 	}, nil
 }
 
