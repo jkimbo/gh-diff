@@ -29,7 +29,7 @@ func (st *Stack) DependantDiffs(ctx context.Context, diff *Diff) ([]*Diff, error
 
 func NewStackFromDiff(ctx context.Context, diff *Diff) (*Stack, error) {
 	if diff.IsSaved() == false {
-		return nil, fmt.Errorf("diff hasn't been saved yet")
+		return nil, fmt.Errorf("can't create stack: diff hasn't been saved yet")
 	}
 
 	// find the first diff in the stack

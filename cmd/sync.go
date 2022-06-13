@@ -42,14 +42,14 @@ var syncCmd = &cobra.Command{
 
 		fmt.Printf("syncing diff: %s (%s)\n", d.GetSubject(), d.ID)
 
-		st, err := diff.NewStackFromDiff(ctx, d)
-		if err != nil {
-			log.Fatalf("err: %v\n", err)
-		}
-
 		err = d.Sync(ctx)
 		if err != nil {
 			log.Fatalf("error: %v", err)
+		}
+
+		st, err := diff.NewStackFromDiff(ctx, d)
+		if err != nil {
+			log.Fatalf("err: %v\n", err)
 		}
 
 		// TODO sync the rest of the stack

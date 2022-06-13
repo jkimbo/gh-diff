@@ -50,7 +50,7 @@ type Diff struct {
 	ID         string
 	Commit     string
 	DBInstance *db.Diff
-	Client     *client.StackedClient
+	client     *client.StackedClient
 }
 
 // Sync .
@@ -95,7 +95,7 @@ func (diff *Diff) Sync(ctx context.Context) error {
 }
 
 func (diff *Diff) syncNew(ctx context.Context, commit string) error {
-	baseRef := fmt.Sprintf("origin/%s", diff.Client.DefaultBranch())
+	baseRef := fmt.Sprintf("origin/%s", diff.client.DefaultBranch())
 
 	branchName, err := diff.generateBranchName()
 	if err != nil {
@@ -124,7 +124,7 @@ func (diff *Diff) syncNew(ctx context.Context, commit string) error {
 
 	if parentDiffID != "" {
 		fmt.Println("parent commit is a diff")
-		parentDiff, err := NewDiffFromID(ctx, diff.Client, parentDiffID)
+		parentDiff, err := NewDiffFromID(ctx, diff.client, parentDiffID)
 		if err != nil {
 			return err
 		}
@@ -140,8 +140,8 @@ func (diff *Diff) syncNew(ctx context.Context, commit string) error {
 				prompt := &survey.Select{
 					Message: fmt.Sprintf("Base?"),
 					Options: []string{
-						parentDiff.DBInstance.Branch,
-						fmt.Sprintf("origin/%s", diff.Client.DefaultBranch()),
+						fmt.Sprintf("%s (%s)", parentDiff.GetSubject(), parentDiff.ID),
+						fmt.Sprintf("origin/%s", diff.client.DefaultBranch()),
 					},
 				}
 				err := survey.AskOne(prompt, &baseRef)
@@ -167,10 +167,10 @@ func (diff *Diff) syncNew(ctx context.Context, commit string) error {
 
 	// TODO create PR from diff
 
-	fmt.Printf("\nCreate a PR 🔽\n\thttps://github.com/frontedxyz/synthwave/compare/%s...%s\n\n", baseRef, branchName)
+	fmt.Printf("\nCreate a PR 🔽\n\thttps://github.com/frontedxyz/synthwave/compare/%s...%s\n\n", diff.client.DefaultBranch(), branchName)
 
 	// Save diff
-	err = diff.Client.SQLDB.CreateDiff(ctx, &db.Diff{
+	err = diff.client.SQLDB.CreateDiff(ctx, &db.Diff{
 		ID:        diff.ID,
 		Branch:    branchName,
 		StackedOn: stackedOn,
@@ -179,11 +179,17 @@ func (diff *Diff) syncNew(ctx context.Context, commit string) error {
 		return err
 	}
 
+	dbDiff, err := diff.client.SQLDB.GetDiff(ctx, diff.ID)
+	if err != nil {
+		return err
+	}
+	diff.DBInstance = dbDiff
+
 	return nil
 }
 
 func (diff *Diff) syncSaved(ctx context.Context, commit string) error {
-	baseRef := fmt.Sprintf("origin/%s", diff.Client.DefaultBranch())
+	baseRef := fmt.Sprintf("origin/%s", diff.client.DefaultBranch())
 
 	stackedOnDiff, err := diff.StackedOn(ctx)
 	if stackedOnDiff != nil {
@@ -204,6 +210,10 @@ func (diff *Diff) syncSaved(ctx context.Context, commit string) error {
 	err = diff.SyncCommitToBranch(ctx, commit, diff.DBInstance.Branch, baseRef)
 	if err != nil {
 		return err
+	}
+
+	if diff.DBInstance.PRNumber == "" {
+		fmt.Printf("\nCreate a PR 🔽\n\thttps://github.com/frontedxyz/synthwave/compare/%s...%s\n\n", diff.client.DefaultBranch(), diff.DBInstance.Branch)
 	}
 
 	return nil
@@ -374,7 +384,7 @@ func (diff *Diff) GetCommit() (string, error) {
 			"git",
 			"rev-list",
 			"--reverse",
-			fmt.Sprintf("origin/%s...HEAD", diff.Client.Config.DefaultBranch),
+			fmt.Sprintf("origin/%s...HEAD", diff.client.Config.DefaultBranch),
 		),
 		true,
 		false,
@@ -436,7 +446,7 @@ func (diff *Diff) IsMerged() (bool, error) {
 		return false, err
 	}
 
-	c := diff.Client
+	c := diff.client
 
 	// check if diff has already been merged
 	// https://git-scm.com/docs/git-cherry
@@ -481,7 +491,7 @@ func (diff *Diff) StackedOn(ctx context.Context) (*Diff, error) {
 		return nil, nil
 	}
 
-	stackedOnDiff, err := NewDiffFromID(ctx, diff.Client, inst.StackedOn)
+	stackedOnDiff, err := NewDiffFromID(ctx, diff.client, inst.StackedOn)
 	if err != nil {
 		return nil, err
 	}
@@ -497,7 +507,7 @@ func (diff *Diff) ChildDiff(ctx context.Context) (*Diff, error) {
 		return nil, fmt.Errorf("diff hasn't been synced: %s", diff.ID)
 	}
 
-	childDiff, err := diff.Client.SQLDB.GetChildDiff(ctx, diff.ID)
+	childDiff, err := diff.client.SQLDB.GetChildDiff(ctx, diff.ID)
 	if err != nil {
 		if err != sql.ErrNoRows {
 			return nil, err
@@ -507,7 +517,7 @@ func (diff *Diff) ChildDiff(ctx context.Context) (*Diff, error) {
 	}
 
 	if childDiff != nil {
-		child, err := NewDiffFromID(ctx, diff.Client, childDiff.ID)
+		child, err := NewDiffFromID(ctx, diff.client, childDiff.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -529,7 +539,7 @@ func NewDiffFromID(ctx context.Context, c *client.StackedClient, diffID string) 
 	return &Diff{
 		ID:         diffID,
 		DBInstance: dbDiff,
-		Client:     c,
+		client:     c,
 	}, nil
 }
 
