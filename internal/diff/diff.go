@@ -107,36 +107,36 @@ func (diff *Diff) Sync(ctx context.Context) error {
 				return err
 			}
 
-			if merged, err := parentDiff.IsMerged(); err != nil {
-				return err
-			} else if merged {
-				fmt.Println("parent commit has already been merged")
-			} else {
-				if parentDiff.IsSaved() == false {
-					return fmt.Errorf("parent diff hasn't been synced")
-				}
-
-				prompt := &survey.Select{
-					Message: fmt.Sprintf("Base?"),
-					Options: []string{
-						parentDiff.DBInstance.Branch,
-						fmt.Sprintf("origin/%s", diff.Client.DefaultBranch()),
-					},
-				}
-				err := survey.AskOne(prompt, &baseRef)
-				if err != nil {
-					if err == terminal.InterruptErr {
-						log.Fatal("interrupted")
+			// If the parent diff hasn't been saved then assume the baseRef is the
+			// default branch
+			if parentDiff.IsSaved() == true {
+				if merged, err := parentDiff.IsMerged(); err != nil {
+					return err
+				} else if merged {
+					fmt.Println("parent commit has already been merged")
+				} else {
+					prompt := &survey.Select{
+						Message: fmt.Sprintf("Base?"),
+						Options: []string{
+							parentDiff.DBInstance.Branch,
+							fmt.Sprintf("origin/%s", diff.Client.DefaultBranch()),
+						},
 					}
-					log.Fatalf("err: %s", err)
-				}
-				if baseRef == parentDiff.DBInstance.Branch {
-					stackedOn = parentDiff.ID
+					err := survey.AskOne(prompt, &baseRef)
+					if err != nil {
+						if err == terminal.InterruptErr {
+							log.Fatal("interrupted")
+						}
+						log.Fatalf("err: %s", err)
+					}
+					if baseRef == parentDiff.DBInstance.Branch {
+						stackedOn = parentDiff.ID
+					}
 				}
 			}
 		}
 
-		fmt.Printf("syncing %s to branch %s...%s\n", commit, branchName, baseRef)
+		fmt.Printf("syncing %s to branch %s (base: %s)\n", commit, branchName, baseRef)
 
 		err = diff.SyncCommitToBranch(ctx, commit, branchName, baseRef, currentBranch)
 		if err != nil {
@@ -144,6 +144,8 @@ func (diff *Diff) Sync(ctx context.Context) error {
 		}
 
 		// TODO create PR from diff
+
+		fmt.Printf("\nCreate a PR 🔽\n\thttps://github.com/frontedxyz/synthwave/compare/%s...%s\n\n", baseRef, branchName)
 
 		// Save diff
 		err = diff.Client.SQLDB.CreateDiff(ctx, &db.Diff{
@@ -180,8 +182,6 @@ func (diff *Diff) Sync(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-
-	// Create Github PR if there isn't one
 
 	return nil
 }
