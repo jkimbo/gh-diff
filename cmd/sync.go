@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/jkimbo/stacked/internal/diff"
 	"github.com/jkimbo/stacked/internal/client"
+	"github.com/jkimbo/stacked/internal/diff"
 	"github.com/spf13/cobra"
 )
 
@@ -40,12 +40,36 @@ var syncCmd = &cobra.Command{
 			log.Fatalf("err: %v\n", err)
 		}
 
-		fmt.Println("syncing diff:", commit)
+		fmt.Printf("syncing diff: %s (%s)\n", d.GetSubject(), d.ID)
+
+		st, err := diff.NewStackFromDiff(ctx, d)
+		if err != nil {
+			log.Fatalf("err: %v\n", err)
+		}
 
 		err = d.Sync(ctx)
 		if err != nil {
 			log.Fatalf("error: %v", err)
 		}
+
+		// TODO sync the rest of the stack
+		dependantDiffs, err := st.DependantDiffs(ctx, d)
+		if err != nil {
+			log.Fatalf("error: %v", err)
+		}
+
+		if len(dependantDiffs) > 0 {
+			fmt.Printf("%d dependant diffs to sync\n", len(dependantDiffs))
+
+			for _, dependantDiff := range dependantDiffs {
+				fmt.Printf("syncing dependant diff: %s (%s)\n", dependantDiff.GetSubject(), dependantDiff.ID)
+				err = dependantDiff.Sync(ctx)
+				if err != nil {
+					log.Fatalf("error: %v", err)
+				}
+			}
+		}
+
 		return
 
 		// TODO sync any diffs that are stacked on top of this one
