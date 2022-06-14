@@ -47,13 +47,8 @@ var syncCmd = &cobra.Command{
 			log.Fatalf("error: %v", err)
 		}
 
-		st, err := diff.NewStackFromDiff(ctx, d)
-		if err != nil {
-			log.Fatalf("err: %v\n", err)
-		}
-
 		// TODO sync the rest of the stack
-		dependantDiffs, err := st.DependantDiffs(ctx, d)
+		dependantDiffs, err := d.GetDependantDiffs(ctx)
 		if err != nil {
 			log.Fatalf("error: %v", err)
 		}
@@ -70,9 +65,9 @@ var syncCmd = &cobra.Command{
 			}
 		}
 
-		return
+		// TODO update all PR descriptions and titles in the stack
 
-		// TODO sync any diffs that are stacked on top of this one
+		return
 
 		// diffID = fmt.Sprintf("D%s", randomString(5))
 

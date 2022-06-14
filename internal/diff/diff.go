@@ -91,21 +91,11 @@ func (diff *Diff) Sync(ctx context.Context) error {
 		return err
 	}
 
-	if diff.DBInstance.PRNumber == "" {
-		// TODO create PR from diff
-
-		fmt.Printf("\nCreate a PR 🔽\n\thttps://github.com/frontedxyz/synthwave/compare/%s...%s\n\n", diff.client.DefaultBranch(), diff.DBInstance.Branch)
-
-		st, err := NewStackFromDiff(ctx, diff)
+	if diff.HasPR() == false {
+		err = diff.CreatePR(ctx)
 		if err != nil {
 			return err
 		}
-
-		table, err := st.buildTable()
-		if err != nil {
-			return err
-		}
-		fmt.Printf("PR description:\n\n%s\n\n", table)
 	}
 
 	return nil
@@ -226,6 +216,14 @@ func (diff *Diff) syncSaved(ctx context.Context, commit string) error {
 	}
 
 	return nil
+}
+
+func (diff *Diff) getStack(ctx context.Context) (*Stack, error) {
+	st, err := NewStackFromDiff(ctx, diff)
+	if err != nil {
+		return nil, err
+	}
+	return st, nil
 }
 
 // SyncCommitToBranch .
@@ -351,6 +349,34 @@ func (diff *Diff) SyncCommitToBranch(ctx context.Context, commit, branchName, ba
 	return nil
 }
 
+// CreatePR .
+func (diff *Diff) CreatePR(ctx context.Context) error {
+	st, err := diff.getStack(ctx)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("\nCreate a PR 🔽\n\thttps://github.com/frontedxyz/synthwave/compare/%s...%s\n\n", diff.client.DefaultBranch(), diff.GetBranch())
+
+	table, err := st.buildTable()
+	if err != nil {
+		log.Fatalf("err: %v\n", err)
+	}
+	fmt.Printf("PR description:\n\n%s\n\n", table)
+
+	return nil
+}
+
+// GetDependantDiffs .
+func (diff *Diff) GetDependantDiffs(ctx context.Context) ([]*Diff, error) {
+	st, err := diff.getStack(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return st.DependantDiffs(ctx, diff)
+}
+
 func (diff *Diff) generateBranchName() (string, error) {
 	var commit string
 	commit, err := diff.GetCommit()
@@ -448,6 +474,11 @@ func (diff *Diff) GetSubject() string {
 	return subject
 }
 
+// GetBranch .
+func (diff *Diff) GetBranch() string {
+	return diff.DBInstance.Branch
+}
+
 // IsMerged returns true if the diff has already been merged
 func (diff *Diff) IsMerged() (bool, error) {
 	commit, err := diff.GetCommit()
@@ -486,6 +517,11 @@ func (diff *Diff) IsSaved() bool {
 		return false
 	}
 	return true
+}
+
+// HasPR .
+func (diff *Diff) HasPR() bool {
+	return diff.DBInstance.PRNumber != ""
 }
 
 // StackedOn .
