@@ -27,6 +27,24 @@ func (st *Stack) DependantDiffs(ctx context.Context, diff *Diff) ([]*Diff, error
 	return st.diffs[index+1:], nil
 }
 
+func (st *Stack) buildTable() (string, error) {
+	var sb strings.Builder
+
+	if len(st.diffs) <= 1 {
+		return "", nil
+	}
+
+	sb.WriteString("### 📚 Stack\n\n")
+	sb.WriteString("| PR | Title |\n")
+	sb.WriteString("| -- | -- |\n")
+
+	for _, diff := range st.diffs {
+		// TODO get subject from PR description
+		sb.WriteString(fmt.Sprintf("| #%s | %s |\n", "", diff.GetSubject()))
+	}
+	return sb.String(), nil
+}
+
 func NewStackFromDiff(ctx context.Context, diff *Diff) (*Stack, error) {
 	if diff.IsSaved() == false {
 		return nil, fmt.Errorf("can't create stack: diff hasn't been saved yet")

@@ -91,6 +91,23 @@ func (diff *Diff) Sync(ctx context.Context) error {
 		return err
 	}
 
+	if diff.DBInstance.PRNumber == "" {
+		// TODO create PR from diff
+
+		fmt.Printf("\nCreate a PR 🔽\n\thttps://github.com/frontedxyz/synthwave/compare/%s...%s\n\n", diff.client.DefaultBranch(), diff.DBInstance.Branch)
+
+		st, err := NewStackFromDiff(ctx, diff)
+		if err != nil {
+			return err
+		}
+
+		table, err := st.buildTable()
+		if err != nil {
+			return err
+		}
+		fmt.Printf("PR description:\n\n%s\n\n", table)
+	}
+
 	return nil
 }
 
@@ -165,10 +182,6 @@ func (diff *Diff) syncNew(ctx context.Context, commit string) error {
 		return err
 	}
 
-	// TODO create PR from diff
-
-	fmt.Printf("\nCreate a PR 🔽\n\thttps://github.com/frontedxyz/synthwave/compare/%s...%s\n\n", diff.client.DefaultBranch(), branchName)
-
 	// Save diff
 	err = diff.client.SQLDB.CreateDiff(ctx, &db.Diff{
 		ID:        diff.ID,
@@ -210,10 +223,6 @@ func (diff *Diff) syncSaved(ctx context.Context, commit string) error {
 	err = diff.SyncCommitToBranch(ctx, commit, diff.DBInstance.Branch, baseRef)
 	if err != nil {
 		return err
-	}
-
-	if diff.DBInstance.PRNumber == "" {
-		fmt.Printf("\nCreate a PR 🔽\n\thttps://github.com/frontedxyz/synthwave/compare/%s...%s\n\n", diff.client.DefaultBranch(), diff.DBInstance.Branch)
 	}
 
 	return nil
