@@ -12,7 +12,7 @@ import (
 var repo *git.Repository
 
 var rootCmd = &cobra.Command{
-	Use:   "stacked",
+	Use:   "gh-diff",
 	Short: "Stacked diffs 📚",
 }
 

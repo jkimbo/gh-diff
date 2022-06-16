@@ -1,6 +1,6 @@
 package main
 
-import "github.com/jkimbo/stacked/cmd"
+import "github.com/jkimbo/gh-diff/cmd"
 
 func main() {
 	cmd.Execute()

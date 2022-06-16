@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/jkimbo/stacked/internal/config"
-	"github.com/jkimbo/stacked/internal/db"
+	"github.com/jkimbo/gh-diff/internal/config"
+	"github.com/jkimbo/gh-diff/internal/db"
 )
 
 type StackedClient struct {

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/jkimbo/stacked/internal/client"
-	"github.com/jkimbo/stacked/internal/diff"
+	"github.com/jkimbo/gh-diff/internal/client"
+	"github.com/jkimbo/gh-diff/internal/diff"
 	"github.com/spf13/cobra"
 )
 

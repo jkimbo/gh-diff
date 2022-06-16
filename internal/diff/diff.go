@@ -11,9 +11,9 @@ import (
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/AlecAivazis/survey/v2/terminal"
-	"github.com/jkimbo/stacked/internal/client"
-	"github.com/jkimbo/stacked/internal/db"
-	"github.com/jkimbo/stacked/utils"
+	"github.com/jkimbo/gh-diff/internal/client"
+	"github.com/jkimbo/gh-diff/internal/db"
+	"github.com/jkimbo/gh-diff/utils"
 )
 
 func diffIDFromCommit(commit string) (string, error) {

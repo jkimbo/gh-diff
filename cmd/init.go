@@ -13,9 +13,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/jkimbo/stacked/internal/config"
-	"github.com/jkimbo/stacked/internal/db"
-	"github.com/jkimbo/stacked/utils"
+	"github.com/jkimbo/gh-diff/internal/config"
+	"github.com/jkimbo/gh-diff/internal/db"
+	"github.com/jkimbo/gh-diff/utils"
 	_ "github.com/mattn/go-sqlite3" // so that sqlx works with sqlite
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"

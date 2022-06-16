@@ -1,4 +1,4 @@
-module github.com/jkimbo/stacked
+module github.com/jkimbo/gh-diff
 
 go 1.16
 

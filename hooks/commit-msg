@@ -35,7 +35,7 @@ else
   refhash="$(git hash-object -t tree /dev/null)"
 fi
 
-random=$(stacked generate-id)
+random=$( (whoami ; hostname ; date; cat $1 ; echo $RANDOM) | git hash-object --stdin | head -c 5)
 dest="$1.tmp.${random}"
 
 trap 'rm -f "${dest}"' EXIT
@@ -53,7 +53,7 @@ fi
 # Avoid the --in-place option which only appeared in Git 2.8
 # Avoid the --if-exists option which only appeared in Git 2.15
 if ! git -c trailer.ifexists=doNothing interpret-trailers \
-      --trailer "DiffID: ${random}" < "$1" > "${dest}" ; then
+      --trailer "DiffID: I${random}" < "$1" > "${dest}" ; then
   echo "cannot insert DiffID line in $1"
   exit 1
 fi

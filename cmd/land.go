@@ -7,9 +7,9 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/jkimbo/stacked/internal/client"
-	"github.com/jkimbo/stacked/internal/diff"
-	"github.com/jkimbo/stacked/utils"
+	"github.com/jkimbo/gh-diff/internal/client"
+	"github.com/jkimbo/gh-diff/internal/diff"
+	"github.com/jkimbo/gh-diff/utils"
 	"github.com/spf13/cobra"
 )
 
