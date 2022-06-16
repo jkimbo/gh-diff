@@ -3,12 +3,22 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"log"
+	"os"
 
 	"github.com/jkimbo/stacked/internal/client"
 	"github.com/jkimbo/stacked/internal/diff"
 	"github.com/spf13/cobra"
 )
+
+func check(err error) {
+	if err != nil {
+		if os.Getenv("GH_DIFF_DEBUG") == "1" {
+			panic(err)
+		}
+		fmt.Printf("error: %s\n", err)
+		os.Exit(1)
+	}
+}
 
 var syncCmd = &cobra.Command{
 	Use:   "sync [commit]",
@@ -31,27 +41,24 @@ var syncCmd = &cobra.Command{
 		commit := args[0]
 
 		c, err := client.NewStackedClient(ctx)
-		if err != nil {
-			log.Fatalf("err: %v\n", err)
-		}
+		check(err)
 
 		d, err := diff.NewDiffFromCommit(ctx, c, commit)
-		if err != nil {
-			log.Fatalf("err: %v\n", err)
-		}
+		check(err)
 
 		fmt.Printf("syncing diff: %s (%s)\n", d.GetSubject(), d.ID)
 
 		err = d.Sync(ctx)
-		if err != nil {
-			log.Fatalf("error: %v", err)
+		check(err)
+
+		if d.HasPR() == false {
+			err = d.CreatePR(ctx)
+			check(err)
 		}
 
 		// TODO sync the rest of the stack
 		dependantDiffs, err := d.GetDependantDiffs(ctx)
-		if err != nil {
-			log.Fatalf("error: %v", err)
-		}
+		check(err)
 
 		if len(dependantDiffs) > 0 {
 			fmt.Printf("%d dependant diffs to sync\n", len(dependantDiffs))
@@ -59,9 +66,7 @@ var syncCmd = &cobra.Command{
 			for _, dependantDiff := range dependantDiffs {
 				fmt.Printf("syncing dependant diff: %s (%s)\n", dependantDiff.GetSubject(), dependantDiff.ID)
 				err = dependantDiff.Sync(ctx)
-				if err != nil {
-					log.Fatalf("error: %v", err)
-				}
+				check(err)
 			}
 		}
 
