@@ -37,16 +37,16 @@ var initCmd = &cobra.Command{
 		}
 		rootPath := strings.TrimSpace(string(path))
 
-		newpath := filepath.Join(rootPath, ".stacked")
+		newpath := filepath.Join(rootPath, ".diff")
 		err = os.MkdirAll(newpath, os.ModePerm)
 		if err != nil {
-			log.Fatalf("Unable to create .stacked dir")
+			log.Fatalf("Unable to create .diff dir")
 		}
 
-		if _, err := os.Stat(filepath.Join(rootPath, ".stacked", "main.db")); errors.Is(err, os.ErrNotExist) {
+		if _, err := os.Stat(filepath.Join(rootPath, ".diff", "main.db")); errors.Is(err, os.ErrNotExist) {
 			// Create DB file
 			fmt.Println("Creating main.db...")
-			file, err := os.Create(filepath.Join(".stacked", "main.db"))
+			file, err := os.Create(filepath.Join(".diff", "main.db"))
 			if err != nil {
 				log.Fatal(err.Error())
 			}
@@ -54,7 +54,7 @@ var initCmd = &cobra.Command{
 			fmt.Println("main.db created")
 		}
 
-		db, err := db.NewDB(ctx, filepath.Join(rootPath, ".stacked", "main.db"))
+		db, err := db.NewDB(ctx, filepath.Join(rootPath, ".diff", "main.db"))
 		if err != nil {
 			log.Fatalf("Unable to connect to database: %v\n", err)
 		}
@@ -96,7 +96,7 @@ var initCmd = &cobra.Command{
 		if err != nil {
 			log.Fatalf("error: %v", err)
 		}
-		err = os.WriteFile(filepath.Join(rootPath, ".stacked", "config.yaml"), d, 0644)
+		err = os.WriteFile(filepath.Join(rootPath, ".diff", "config.yaml"), d, 0644)
 		if err != nil {
 			log.Fatalf("error: %v", err)
 		}
@@ -107,7 +107,7 @@ var initCmd = &cobra.Command{
 			log.Fatalf("commit-msg hook already exists")
 		}
 
-		resp, err := http.Get("https://raw.githubusercontent.com/jkimbo/stacked/main/hooks/commit-msg")
+		resp, err := http.Get("https://raw.githubusercontent.com/jkimbo/gh-diff/main/hooks/commit-msg")
 		if err != nil {
 			log.Fatalf("err downloading hook: %s", err)
 		}
