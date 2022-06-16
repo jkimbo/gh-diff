@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -91,13 +92,6 @@ func (diff *Diff) Sync(ctx context.Context) error {
 		return err
 	}
 
-	if diff.HasPR() == false {
-		err = diff.CreatePR(ctx)
-		if err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
@@ -144,21 +138,22 @@ func (diff *Diff) syncNew(ctx context.Context, commit string) error {
 			} else if merged {
 				fmt.Println("parent commit has already been merged")
 			} else {
-				prompt := &survey.Select{
-					Message: fmt.Sprintf("Base?"),
-					Options: []string{
-						fmt.Sprintf("%s (%s)", parentDiff.GetSubject(), parentDiff.ID),
-						fmt.Sprintf("origin/%s", diff.client.DefaultBranch()),
-					},
+				stackChanges := false
+				prompt := &survey.Confirm{
+					Message: fmt.Sprintf(
+						"Stack your changes on \"[%s] %s\"?",
+						parentDiff.ID, parentDiff.GetSubject(),
+					),
 				}
-				err := survey.AskOne(prompt, &baseRef)
+				err := survey.AskOne(prompt, &stackChanges)
 				if err != nil {
 					if err == terminal.InterruptErr {
-						log.Fatal("interrupted")
+						os.Exit(1)
 					}
 					log.Fatalf("err: %s", err)
 				}
-				if baseRef == parentDiff.DBInstance.Branch {
+				if stackChanges == true {
+					baseRef = parentDiff.DBInstance.Branch
 					stackedOn = parentDiff.ID
 				}
 			}
@@ -356,13 +351,79 @@ func (diff *Diff) CreatePR(ctx context.Context) error {
 		return err
 	}
 
-	fmt.Printf("\nCreate a PR 🔽\n\thttps://github.com/frontedxyz/synthwave/compare/%s...%s\n\n", diff.client.DefaultBranch(), diff.GetBranch())
+	baseRef := diff.client.DefaultBranch()
+	stackedOn, err := diff.StackedOn(ctx)
+	if err != nil {
+		return err
+	}
+
+	if stackedOn != nil {
+		baseRef = stackedOn.GetBranch()
+	}
+
+	fmt.Printf("\nCreate a PR 🔽\n\thttps://github.com/frontedxyz/synthwave/compare/%s...%s\n\n", baseRef, diff.GetBranch())
+
+	fmt.Printf("----\n")
+
+	title := diff.GetSubject()
+
+	if st.Size() > 1 {
+		index := st.GetIndex(diff)
+		title += fmt.Sprintf(" (%d/%d)", index+1, st.Size())
+	}
+	fmt.Printf("Title: %s\n", title)
+
+	var body strings.Builder
+	body.WriteString("Body:\n")
+	body.WriteString(fmt.Sprintf("%s\n", diff.GetBody()))
 
 	table, err := st.buildTable()
 	if err != nil {
 		log.Fatalf("err: %v\n", err)
 	}
-	fmt.Printf("PR description:\n\n%s\n\n", table)
+	if table != "" {
+		body.WriteString(fmt.Sprintf("%s", table))
+	}
+
+	fmt.Println(body.String())
+
+	fmt.Printf("----\n")
+
+	return nil
+}
+
+// UpdatePRDescription .
+func (diff *Diff) UpdatePRDescription(ctx context.Context) error {
+	st, err := diff.getStack(ctx)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("----\n")
+
+	title := diff.GetSubject()
+
+	if st.Size() > 1 {
+		index := st.GetIndex(diff)
+		title += fmt.Sprintf(" (%d/%d)", index+1, st.Size())
+	}
+	fmt.Printf("Title: %s\n", title)
+
+	var body strings.Builder
+	body.WriteString("Body:\n")
+	body.WriteString(fmt.Sprintf("%s\n", diff.GetBody()))
+
+	table, err := st.buildTable()
+	if err != nil {
+		log.Fatalf("err: %v\n", err)
+	}
+	if table != "" {
+		body.WriteString(fmt.Sprintf("%s", table))
+	}
+
+	fmt.Println(body.String())
+
+	fmt.Printf("----\n")
 
 	return nil
 }
@@ -474,6 +535,28 @@ func (diff *Diff) GetSubject() string {
 	return subject
 }
 
+// GetBody .
+func (diff *Diff) GetBody() string {
+	commit, err := diff.GetCommit()
+	if err != nil {
+		panic(err.Error())
+	}
+
+	subject := utils.MustRunCommand(
+		"Get commit subject",
+		exec.Command(
+			"git",
+			"show",
+			"-s",
+			"--format=%b",
+			commit,
+		),
+		true,
+		false,
+	)
+	return subject
+}
+
 // GetBranch .
 func (diff *Diff) GetBranch() string {
 	return diff.DBInstance.Branch
@@ -542,6 +625,15 @@ func (diff *Diff) StackedOn(ctx context.Context) (*Diff, error) {
 	}
 	if stackedOnDiff.IsSaved() == false {
 		return nil, fmt.Errorf("diff hasn't been synced: %s", stackedOnDiff.ID)
+	}
+
+	merged, err := stackedOnDiff.IsMerged()
+	if err != nil {
+		return nil, err
+	}
+
+	if merged == true {
+		return nil, nil
 	}
 	return stackedOnDiff, nil
 }

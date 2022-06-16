@@ -12,6 +12,20 @@ type Stack struct {
 
 func (st *Stack) DependantDiffs(ctx context.Context, diff *Diff) ([]*Diff, error) {
 	// find index of diff
+	index := st.GetIndex(diff)
+
+	if index == -1 {
+		return nil, fmt.Errorf("cannot find diff in stack")
+	}
+
+	return st.diffs[index+1:], nil
+}
+
+func (st *Stack) Size() int {
+	return len(st.diffs)
+}
+
+func (st *Stack) GetIndex(diff *Diff) int {
 	index := -1
 	for idx, d := range st.diffs {
 		if d.ID == diff.ID {
@@ -20,11 +34,7 @@ func (st *Stack) DependantDiffs(ctx context.Context, diff *Diff) ([]*Diff, error
 		}
 	}
 
-	if index == -1 {
-		return nil, fmt.Errorf("cannot find diff in stack")
-	}
-
-	return st.diffs[index+1:], nil
+	return index
 }
 
 func (st *Stack) buildTable() (string, error) {
@@ -111,7 +121,6 @@ func NewStackFromDiff(ctx context.Context, diff *Diff) (*Stack, error) {
 	for _, diff := range diffs {
 		diffIDs = append(diffIDs, diff.ID)
 	}
-	fmt.Printf("stack: [%s]\n", strings.Join(diffIDs, ","))
 
 	return &Stack{
 		diffs: diffs,
