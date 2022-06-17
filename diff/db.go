@@ -5,6 +5,7 @@ import (
 
 	"github.com/Masterminds/squirrel"
 	"github.com/jmoiron/sqlx"
+	_ "github.com/mattn/go-sqlite3" // so that sqlx works with sqlite
 )
 
 const SCHEMA = `
@@ -104,6 +105,16 @@ func (db *SQLDB) GetChildDiff(ctx context.Context, diffID string) (*dbdiff, erro
 		return nil, err
 	}
 	return &diff, nil
+}
+
+func (db *SQLDB) RemoveDiff(ctx context.Context, diffID string) error {
+	query, args, err := db.StatementBuilder.Delete("diffs").
+		Where("id = ?", diffID).ToSql()
+	if err != nil {
+		return err
+	}
+	_, err = db.DB.ExecContext(ctx, query, args...)
+	return err
 }
 
 // Init setups up the database schema

@@ -68,18 +68,29 @@ func NewStackFromDiff(ctx context.Context, diff *Diff) (*Stack, error) {
 	}
 
 	if parent != nil {
-		parents = append(parents, parent)
-
-		// keep looping to find all the parents
-		for {
-			parent, err = parent.StackedOn(ctx)
+		commit := parent.GetCommit()
+		if commit == "" {
+			// if we can't find the commit for a diff then that diff is no longer part
+			// of the stack and we should remove it
+			err := client.db.RemoveDiff(ctx, parent.ID)
 			if err != nil {
 				return nil, err
 			}
-			if parent == nil {
-				break
-			}
+			fmt.Printf("removed diff %s\n", parent.ID)
+		} else {
 			parents = append(parents, parent)
+
+			// keep looping to find all the parents
+			for {
+				parent, err = parent.StackedOn(ctx)
+				if err != nil {
+					return nil, err
+				}
+				if parent == nil {
+					break
+				}
+				parents = append(parents, parent)
+			}
 		}
 	}
 
@@ -97,18 +108,29 @@ func NewStackFromDiff(ctx context.Context, diff *Diff) (*Stack, error) {
 	}
 
 	if child != nil {
-		children = append(children, child)
-
-		// keep looping to find all the children
-		for {
-			child, err = child.ChildDiff(ctx)
+		commit := child.GetCommit()
+		if commit == "" {
+			// if we can't find the commit for a diff then that diff is no longer part
+			// of the stack and we should remove it
+			err := client.db.RemoveDiff(ctx, child.ID)
 			if err != nil {
 				return nil, err
 			}
-			if child == nil {
-				break
-			}
+			fmt.Printf("removed diff %s\n", child.ID)
+		} else {
 			children = append(children, child)
+
+			// keep looping to find all the children
+			for {
+				child, err = child.ChildDiff(ctx)
+				if err != nil {
+					return nil, err
+				}
+				if child == nil {
+					break
+				}
+				children = append(children, child)
+			}
 		}
 	}
 
