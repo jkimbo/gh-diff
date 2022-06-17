@@ -1,4 +1,4 @@
-package utils
+package diff
 
 import (
 	"fmt"
@@ -10,6 +10,16 @@ import (
 
 	"github.com/cli/go-gh"
 )
+
+func check(err error) {
+	if err != nil {
+		if os.Getenv("GH_DIFF_DEBUG") == "1" {
+			panic(err)
+		}
+		fmt.Printf("error: %s\n", err)
+		os.Exit(1)
+	}
+}
 
 var seededRand *rand.Rand = rand.New(rand.NewSource(time.Now().UnixNano()))
 
@@ -31,11 +41,7 @@ func printCmd(description string, cmd *exec.Cmd) {
 	fmt.Println("")
 }
 
-func RunCommand(description string, cmd *exec.Cmd, capture bool, verbose bool) (string, error) {
-	// TODO only print when verbose flag is set
-	if verbose == true {
-		printCmd(description, cmd)
-	}
+func runCommand(cmd *exec.Cmd, capture bool, verbose bool) (string, error) {
 	var out []byte
 	var err error
 	if capture {
@@ -48,7 +54,6 @@ func RunCommand(description string, cmd *exec.Cmd, capture bool, verbose bool) (
 		}
 
 		if err != nil {
-			fmt.Printf("# cmd err: %s\n", description)
 			fmt.Printf("# cmd: %v\n", cmd.Args)
 			fmt.Println("#", output)
 			fmt.Println("Error:", err)
@@ -71,16 +76,14 @@ func RunCommand(description string, cmd *exec.Cmd, capture bool, verbose bool) (
 	return string(out), nil
 }
 
-func MustRunCommand(description string, cmd *exec.Cmd, capture bool, verbose bool) string {
-	output, err := RunCommand(description, cmd, capture, verbose)
-	if err != nil {
-		panic(err.Error())
-	}
+func mustCommand(cmd *exec.Cmd, capture bool, verbose bool) string {
+	output, err := runCommand(cmd, capture, verbose)
+	check(err)
 
 	return output
 }
 
-func RunGHCommand(description string, args []string) (string, string, error) {
+func ghCommand(args []string) (string, string, error) {
 	stdOut, stdErr, err := gh.Exec(args...)
 	if err != nil {
 		fmt.Println(err)

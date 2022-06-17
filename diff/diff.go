@@ -11,15 +11,11 @@ import (
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/AlecAivazis/survey/v2/terminal"
-	"github.com/jkimbo/gh-diff/internal/client"
-	"github.com/jkimbo/gh-diff/internal/db"
-	"github.com/jkimbo/gh-diff/utils"
 )
 
 func diffIDFromCommit(commit string) (string, error) {
 	// Find diff trailer
-	trailers, err := utils.RunCommand(
-		"Get commit trailers",
+	trailers := mustCommand(
 		exec.Command(
 			"bash",
 			"-c",
@@ -28,9 +24,6 @@ func diffIDFromCommit(commit string) (string, error) {
 		true,
 		false,
 	)
-	if err != nil {
-		return "", err
-	}
 
 	lines := strings.Split(trailers, "\n")
 	var diffID string
@@ -46,12 +39,12 @@ func diffIDFromCommit(commit string) (string, error) {
 	return diffID, nil
 }
 
-// Diff .
+// diff .
 type Diff struct {
 	ID         string
 	Commit     string
-	DBInstance *db.Diff
-	client     *client.StackedClient
+	DBInstance *dbdiff
+	client     *client
 }
 
 // Sync .
@@ -62,8 +55,7 @@ func (diff *Diff) Sync(ctx context.Context) error {
 	}
 
 	// Store current branch so that we can switch back to it later
-	currentBranch := utils.MustRunCommand(
-		"Get current branch",
+	currentBranch := mustCommand(
 		exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD"),
 		true,
 		false,
@@ -79,8 +71,7 @@ func (diff *Diff) Sync(ctx context.Context) error {
 	}
 
 	// Always switch back to "currentBranch"
-	utils.MustRunCommand(
-		"Switch back to current branch",
+	mustCommand(
 		exec.Command(
 			"git", "switch", currentBranch,
 		),
@@ -96,7 +87,7 @@ func (diff *Diff) Sync(ctx context.Context) error {
 }
 
 func (diff *Diff) syncNew(ctx context.Context, commit string) error {
-	baseRef := fmt.Sprintf("origin/%s", diff.client.DefaultBranch())
+	baseRef := fmt.Sprintf("origin/%s", Client.DefaultBranch())
 
 	branchName, err := diff.generateBranchName()
 	if err != nil {
@@ -106,8 +97,7 @@ func (diff *Diff) syncNew(ctx context.Context, commit string) error {
 	var stackedOn string
 
 	// Check parent commit to see if it's also a diff
-	parentCommit, err := utils.RunCommand(
-		"Get parent commit",
+	parentCommit, err := runCommand(
 		exec.Command(
 			"git", "rev-parse", fmt.Sprintf("%s^", commit),
 		),
@@ -125,7 +115,7 @@ func (diff *Diff) syncNew(ctx context.Context, commit string) error {
 
 	if parentDiffID != "" {
 		fmt.Println("parent commit is a diff")
-		parentDiff, err := NewDiffFromID(ctx, diff.client, parentDiffID)
+		parentDiff, err := newDiffFromID(ctx, parentDiffID)
 		if err != nil {
 			return err
 		}
@@ -168,7 +158,7 @@ func (diff *Diff) syncNew(ctx context.Context, commit string) error {
 	}
 
 	// Save diff
-	err = diff.client.SQLDB.CreateDiff(ctx, &db.Diff{
+	err = diff.client.db.CreateDiff(ctx, &dbdiff{
 		ID:        diff.ID,
 		Branch:    branchName,
 		StackedOn: stackedOn,
@@ -177,7 +167,7 @@ func (diff *Diff) syncNew(ctx context.Context, commit string) error {
 		return err
 	}
 
-	dbDiff, err := diff.client.SQLDB.GetDiff(ctx, diff.ID)
+	dbDiff, err := diff.client.db.GetDiff(ctx, diff.ID)
 	if err != nil {
 		return err
 	}
@@ -223,45 +213,33 @@ func (diff *Diff) getStack(ctx context.Context) (*Stack, error) {
 
 // SyncCommitToBranch .
 func (diff *Diff) SyncCommitToBranch(ctx context.Context, commit, branchName, baseRef string) error {
-	commitDate, err := utils.RunCommand(
-		"Get commit date",
+	var err error
+	commitDate := mustCommand(
 		exec.Command(
 			"git", "show", "-s", "--format=%ci", commit,
 		),
 		true,
 		false,
 	)
-	if err != nil {
-		return err
-	}
 
-	committerName, err := utils.RunCommand(
-		"Get committer name",
+	committerName := mustCommand(
 		exec.Command(
 			"git", "show", "-s", "--format=%cn", commit,
 		),
 		true,
 		false,
 	)
-	if err != nil {
-		return err
-	}
 
-	committerEmail, err := utils.RunCommand(
-		"Get committer email",
+	committerEmail := mustCommand(
 		exec.Command(
 			"git", "show", "-s", "--format=%ce", commit,
 		),
 		true,
 		false,
 	)
-	if err != nil {
-		return err
-	}
 
 	// Note: we don't care if this command fails
-	utils.RunCommand(
-		"Delete branch locally",
+	runCommand(
 		exec.Command(
 			"bash",
 			"-c",
@@ -274,29 +252,21 @@ func (diff *Diff) SyncCommitToBranch(ctx context.Context, commit, branchName, ba
 		false,
 	)
 
-	_, err = utils.RunCommand(
-		"Create new branch",
+	mustCommand(
 		exec.Command(
 			"git", "branch", "--no-track", branchName, baseRef,
 		),
 		true,
 		false,
 	)
-	if err != nil {
-		return err
-	}
 
-	_, err = utils.RunCommand(
-		"Switch to branch",
+	mustCommand(
 		exec.Command(
 			"git", "switch", branchName,
 		),
 		true,
 		false,
 	)
-	if err != nil {
-		return err
-	}
 
 	cmd := exec.Command(
 		"git", "cherry-pick", commit,
@@ -305,8 +275,7 @@ func (diff *Diff) SyncCommitToBranch(ctx context.Context, commit, branchName, ba
 	cmd.Env = append(cmd.Env, fmt.Sprintf("GIT_COMMITTER_EMAIL=%s", committerEmail))
 	cmd.Env = append(cmd.Env, fmt.Sprintf("GIT_COMMITTER_DATE=%s", commitDate))
 
-	cherryPickMsg, err := utils.RunCommand(
-		"Cherry pick commit",
+	cherryPickMsg, err := runCommand(
 		cmd,
 		true,
 		false,
@@ -314,8 +283,7 @@ func (diff *Diff) SyncCommitToBranch(ctx context.Context, commit, branchName, ba
 	if err != nil {
 		cherryPickErr := err
 
-		_, err = utils.RunCommand(
-			"Abort cherry pick",
+		_, err = runCommand(
 			exec.Command(
 				"git", "cherry-pick", "--abort",
 			),
@@ -329,8 +297,7 @@ func (diff *Diff) SyncCommitToBranch(ctx context.Context, commit, branchName, ba
 		return fmt.Errorf("cherry-pick failed: %v\n%s", cherryPickErr, cherryPickMsg)
 	}
 
-	_, err = utils.RunCommand(
-		"Push branch",
+	mustCommand(
 		exec.Command(
 			"git", "push", "origin", branchName, "--force",
 		),
@@ -445,8 +412,7 @@ func (diff *Diff) generateBranchName() (string, error) {
 		return commit, err
 	}
 
-	branchName, err := utils.RunCommand(
-		"Generate branch name",
+	branchName, err := runCommand(
 		exec.Command(
 			"bash",
 			"-c",
@@ -474,13 +440,12 @@ func (diff *Diff) GetCommit() (string, error) {
 	// Note: this can and will change as diffs get rebased regularly
 
 	// Loop through all commits between HEAD and base branch
-	commits, err := utils.RunCommand(
-		"Get commits",
+	commits, err := runCommand(
 		exec.Command(
 			"git",
 			"rev-list",
 			"--reverse",
-			fmt.Sprintf("origin/%s...HEAD", diff.client.Config.DefaultBranch),
+			fmt.Sprintf("origin/%s...HEAD", Client.config.defaultBranch),
 		),
 		true,
 		false,
@@ -520,8 +485,7 @@ func (diff *Diff) GetSubject() string {
 		panic(err.Error())
 	}
 
-	subject := utils.MustRunCommand(
-		"Get commit subject",
+	subject := mustCommand(
 		exec.Command(
 			"git",
 			"show",
@@ -542,8 +506,7 @@ func (diff *Diff) GetBody() string {
 		panic(err.Error())
 	}
 
-	subject := utils.MustRunCommand(
-		"Get commit subject",
+	subject := mustCommand(
 		exec.Command(
 			"git",
 			"show",
@@ -573,8 +536,7 @@ func (diff *Diff) IsMerged() (bool, error) {
 
 	// check if diff has already been merged
 	// https://git-scm.com/docs/git-cherry
-	numCommits, err := utils.RunCommand(
-		"Num commits yet to be applied",
+	numCommits := mustCommand(
 		exec.Command(
 			"bash",
 			"-c",
@@ -583,9 +545,6 @@ func (diff *Diff) IsMerged() (bool, error) {
 		true,
 		false,
 	)
-	if err != nil {
-		return false, err
-	}
 
 	if numCommits == "0" {
 		return true, nil
@@ -619,7 +578,7 @@ func (diff *Diff) StackedOn(ctx context.Context) (*Diff, error) {
 		return nil, nil
 	}
 
-	stackedOnDiff, err := NewDiffFromID(ctx, diff.client, inst.StackedOn)
+	stackedOnDiff, err := newDiffFromID(ctx, inst.StackedOn)
 	if err != nil {
 		return nil, err
 	}
@@ -644,7 +603,7 @@ func (diff *Diff) ChildDiff(ctx context.Context) (*Diff, error) {
 		return nil, fmt.Errorf("diff hasn't been synced: %s", diff.ID)
 	}
 
-	childDiff, err := diff.client.SQLDB.GetChildDiff(ctx, diff.ID)
+	childDiff, err := Client.db.GetChildDiff(ctx, diff.ID)
 	if err != nil {
 		if err != sql.ErrNoRows {
 			return nil, err
@@ -654,7 +613,7 @@ func (diff *Diff) ChildDiff(ctx context.Context) (*Diff, error) {
 	}
 
 	if childDiff != nil {
-		child, err := NewDiffFromID(ctx, diff.client, childDiff.ID)
+		child, err := newDiffFromID(ctx, childDiff.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -663,10 +622,9 @@ func (diff *Diff) ChildDiff(ctx context.Context) (*Diff, error) {
 	return nil, nil
 }
 
-// NewDiffFromID .
-func NewDiffFromID(ctx context.Context, c *client.StackedClient, diffID string) (*Diff, error) {
-	var dbDiff *db.Diff
-	dbDiff, err := c.SQLDB.GetDiff(ctx, diffID)
+// newDiffFromID .
+func newDiffFromID(ctx context.Context, diffID string) (*Diff, error) {
+	instance, err := Client.db.GetDiff(ctx, diffID)
 	if err != nil {
 		if err != sql.ErrNoRows {
 			return nil, err
@@ -675,16 +633,14 @@ func NewDiffFromID(ctx context.Context, c *client.StackedClient, diffID string) 
 
 	return &Diff{
 		ID:         diffID,
-		DBInstance: dbDiff,
-		client:     c,
+		DBInstance: instance,
 	}, nil
 }
 
-// NewDiffFromCommit .
-func NewDiffFromCommit(ctx context.Context, c *client.StackedClient, commit string) (*Diff, error) {
+// newDiffFromCommit .
+func newDiffFromCommit(ctx context.Context, commit string) (*Diff, error) {
 	// Check that commit is valid
-	_, err := utils.RunCommand(
-		"Checking commit is valid",
+	_, err := runCommand(
 		exec.Command("git", "cat-file", "-e", commit),
 		false,
 		false,
@@ -703,5 +659,5 @@ func NewDiffFromCommit(ctx context.Context, c *client.StackedClient, commit stri
 		return nil, fmt.Errorf("commit is missing a DiffID")
 	}
 
-	return NewDiffFromID(ctx, c, diffID)
+	return newDiffFromID(ctx, diffID)
 }

@@ -1,4 +1,4 @@
-package db
+package diff
 
 import (
 	"context"
@@ -20,7 +20,7 @@ const SCHEMA = `
 // "models"
 
 // Diff .
-type Diff struct {
+type dbdiff struct {
 	ID        string `db:"id"`
 	Branch    string `db:"branch"`
 	PRNumber  string `db:"pr_number"`
@@ -29,9 +29,9 @@ type Diff struct {
 
 // DB .
 type DB interface {
-	GetDiff(ctx context.Context, diffID string) (*Diff, error)
-	CreateDiff(ctx context.Context, diff *Diff) error
-	GetChildDiff(ctx context.Context, diffID string) (*Diff, error)
+	getDiff(ctx context.Context, diffID string) (*dbdiff, error)
+	createDiff(ctx context.Context, diff *dbdiff) error
+	getChildDiff(ctx context.Context, diffID string) (*dbdiff, error)
 }
 
 // SQLDB .
@@ -54,13 +54,13 @@ func NewDB(ctx context.Context, filepath string) (*SQLDB, error) {
 }
 
 // GetDiff .
-func (db *SQLDB) GetDiff(ctx context.Context, diffID string) (*Diff, error) {
+func (db *SQLDB) GetDiff(ctx context.Context, diffID string) (*dbdiff, error) {
 	query, args, err := db.StatementBuilder.Select("*").From("diffs").
 		Where("id = ?", diffID).ToSql()
 	if err != nil {
 		return nil, err
 	}
-	var diff Diff
+	var diff dbdiff
 	if err := db.DB.Get(&diff, query, args...); err != nil {
 		return nil, err
 	}
@@ -68,7 +68,7 @@ func (db *SQLDB) GetDiff(ctx context.Context, diffID string) (*Diff, error) {
 }
 
 // CreateDiff .
-func (db *SQLDB) CreateDiff(ctx context.Context, diff *Diff) error {
+func (db *SQLDB) CreateDiff(ctx context.Context, diff *dbdiff) error {
 	statement := db.StatementBuilder.Insert("diffs").
 		Columns(
 			"id",
@@ -93,13 +93,13 @@ func (db *SQLDB) CreateDiff(ctx context.Context, diff *Diff) error {
 }
 
 // GetChildDiff .
-func (db *SQLDB) GetChildDiff(ctx context.Context, diffID string) (*Diff, error) {
+func (db *SQLDB) GetChildDiff(ctx context.Context, diffID string) (*dbdiff, error) {
 	query, args, err := db.StatementBuilder.Select("*").From("diffs").
 		Where("stacked_on = ?", diffID).ToSql()
 	if err != nil {
 		return nil, err
 	}
-	var diff Diff
+	var diff dbdiff
 	if err := db.DB.Get(&diff, query, args...); err != nil {
 		return nil, err
 	}
