@@ -12,18 +12,16 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-
-	"gopkg.in/yaml.v2"
 )
 
-var Client *client
+var client *diffclient
 
-type client struct {
+type diffclient struct {
 	db     *SQLDB
 	config *config
 }
 
-func (c *client) Setup(ctx context.Context) error {
+func (c *diffclient) Setup(ctx context.Context) error {
 	sqlDB, err := NewDB(ctx, filepath.Join(".diff", "main.db"))
 	if err != nil {
 		return fmt.Errorf("Unable to connect to database: %v\n", err)
@@ -38,11 +36,7 @@ func (c *client) Setup(ctx context.Context) error {
 	return nil
 }
 
-func (c *client) DefaultBranch() string {
-	return c.config.defaultBranch
-}
-
-func (c *client) SyncDiff(ctx context.Context, commit string) error {
+func (c *diffclient) SyncDiff(ctx context.Context, commit string) error {
 	d, err := newDiffFromCommit(ctx, commit)
 	check(err)
 
@@ -74,7 +68,7 @@ func (c *client) SyncDiff(ctx context.Context, commit string) error {
 	return nil
 }
 
-func (c *client) Init(ctx context.Context) error {
+func (c *diffclient) Init(ctx context.Context) error {
 	// find root path
 	path, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
 	if err != nil {
@@ -109,13 +103,7 @@ func (c *client) Init(ctx context.Context) error {
 		log.Fatalf("error setting up db: %v", err)
 	}
 
-	// Get base branch name
-	gitCmd := exec.Command("gh", "repo", "view", "--json=defaultBranchRef", "--jq=.defaultBranchRef.name")
-	defaultBranch := mustCommand(gitCmd, true, false)
-
-	config := &config{
-		defaultBranch: defaultBranch,
-	}
+	initConfig(rootPath)
 
 	// disablePushCmd := exec.Command("git", "config", fmt.Sprintf("branch.%s.pushRemote", defaultBranch), "no_push")
 	// _, err = runCommand("Disable push to master", disablePushCmd, false)
@@ -130,46 +118,36 @@ func (c *client) Init(ctx context.Context) error {
 		false,
 	)
 
-	d, err := yaml.Marshal(&config)
-	if err != nil {
-		log.Fatalf("error: %v", err)
-	}
-	err = os.WriteFile(filepath.Join(rootPath, ".diff", "config.yaml"), d, 0644)
-	if err != nil {
-		log.Fatalf("error: %v", err)
-	}
-
 	// Setup git commit hook
 	commitMsgHookPath := filepath.Join(rootPath, ".git", "hooks", "commit-msg")
-	if _, err := os.Stat(commitMsgHookPath); err == nil {
-		log.Fatalf("commit-msg hook already exists")
-	}
+	if _, err := os.Stat(commitMsgHookPath); err != nil {
+		resp, err := http.Get("https://raw.githubusercontent.com/jkimbo/gh-diff/main/hooks/commit-msg")
+		if err != nil {
+			log.Fatalf("err downloading hook: %s", err)
+		}
+		defer resp.Body.Close()
 
-	resp, err := http.Get("https://raw.githubusercontent.com/jkimbo/gh-diff/main/hooks/commit-msg")
-	if err != nil {
-		log.Fatalf("err downloading hook: %s", err)
-	}
-	defer resp.Body.Close()
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			log.Fatal(err)
+		}
 
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	err = ioutil.WriteFile(commitMsgHookPath, bodyBytes, 0755)
-	if err != nil {
-		log.Fatalf("err writing hook: %s", err)
+		err = ioutil.WriteFile(commitMsgHookPath, bodyBytes, 0755)
+		if err != nil {
+			log.Fatalf("err writing hook: %s", err)
+		}
+	} else {
+		fmt.Println("commit-msg hook already exists. skipping")
 	}
 
 	return nil
 }
 
-func (c *client) LandDiff(ctx context.Context, commit string) error {
+func (c *diffclient) LandDiff(ctx context.Context, commit string) error {
 	diff, err := newDiffFromCommit(ctx, commit)
 	check(err)
 
-	isMerged, err := diff.IsMerged()
-	check(err)
+	isMerged := diff.IsMerged()
 	if isMerged == true {
 		log.Fatalf("commit already landed")
 	}
@@ -179,8 +157,7 @@ func (c *client) LandDiff(ctx context.Context, commit string) error {
 	stackedOnDiff, err := diff.StackedOn(ctx)
 	check(err)
 	if stackedOnDiff != nil {
-		isMerged, err := stackedOnDiff.IsMerged()
-		check(err)
+		isMerged := stackedOnDiff.IsMerged()
 		if !isMerged {
 			fmt.Printf("Diff is stacked on %s that hasn't landed yet\n", diff.DBInstance.StackedOn)
 			os.Exit(1)
@@ -204,7 +181,7 @@ func (c *client) LandDiff(ctx context.Context, commit string) error {
 
 	mustCommand(
 		exec.Command(
-			"git", "pull", "origin", c.DefaultBranch(), "--rebase",
+			"git", "pull", "origin", c.config.DefaultBranch, "--rebase",
 		),
 		true,
 		false,
@@ -230,7 +207,7 @@ func (c *client) LandDiff(ctx context.Context, commit string) error {
 	return nil
 }
 
-func NewClient() *client {
-	Client = &client{}
-	return Client
+func NewClient() *diffclient {
+	client = &diffclient{}
+	return client
 }

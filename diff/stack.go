@@ -117,11 +117,6 @@ func NewStackFromDiff(ctx context.Context, diff *Diff) (*Stack, error) {
 	diffs = append(diffs, diff)
 	diffs = append(diffs, children...)
 
-	var diffIDs []string
-	for _, diff := range diffs {
-		diffIDs = append(diffIDs, diff.ID)
-	}
-
 	return &Stack{
 		diffs: diffs,
 	}, nil

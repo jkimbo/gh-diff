@@ -27,5 +27,5 @@ var landCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(landCmd)
+	// rootCmd.AddCommand(landCmd)
 }

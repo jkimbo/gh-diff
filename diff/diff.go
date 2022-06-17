@@ -13,7 +13,7 @@ import (
 	"github.com/AlecAivazis/survey/v2/terminal"
 )
 
-func diffIDFromCommit(commit string) (string, error) {
+func diffIDFromCommit(commit string) string {
 	// Find diff trailer
 	trailers := mustCommand(
 		exec.Command(
@@ -36,7 +36,7 @@ func diffIDFromCommit(commit string) (string, error) {
 		}
 	}
 
-	return diffID, nil
+	return diffID
 }
 
 // diff .
@@ -44,14 +44,14 @@ type Diff struct {
 	ID         string
 	Commit     string
 	DBInstance *dbdiff
-	client     *client
 }
 
 // Sync .
 func (diff *Diff) Sync(ctx context.Context) error {
-	commit, err := diff.GetCommit()
-	if err != nil {
-		return err
+	var err error
+	commit := diff.GetCommit()
+	if commit == "" {
+		return fmt.Errorf("can't find commit for diff %s", diff.ID)
 	}
 
 	// Store current branch so that we can switch back to it later
@@ -87,7 +87,7 @@ func (diff *Diff) Sync(ctx context.Context) error {
 }
 
 func (diff *Diff) syncNew(ctx context.Context, commit string) error {
-	baseRef := fmt.Sprintf("origin/%s", Client.DefaultBranch())
+	baseRef := fmt.Sprintf("origin/%s", client.config.DefaultBranch)
 
 	branchName, err := diff.generateBranchName()
 	if err != nil {
@@ -108,10 +108,7 @@ func (diff *Diff) syncNew(ctx context.Context, commit string) error {
 		return err
 	}
 
-	parentDiffID, err := diffIDFromCommit(parentCommit)
-	if err != nil {
-		return err
-	}
+	parentDiffID := diffIDFromCommit(parentCommit)
 
 	if parentDiffID != "" {
 		fmt.Println("parent commit is a diff")
@@ -123,9 +120,8 @@ func (diff *Diff) syncNew(ctx context.Context, commit string) error {
 		// If the parent diff hasn't been saved then assume the baseRef is the
 		// default branch
 		if parentDiff.IsSaved() == true {
-			if merged, err := parentDiff.IsMerged(); err != nil {
-				return err
-			} else if merged {
+			merged := parentDiff.IsMerged()
+			if merged {
 				fmt.Println("parent commit has already been merged")
 			} else {
 				stackChanges := false
@@ -158,7 +154,7 @@ func (diff *Diff) syncNew(ctx context.Context, commit string) error {
 	}
 
 	// Save diff
-	err = diff.client.db.CreateDiff(ctx, &dbdiff{
+	err = client.db.CreateDiff(ctx, &dbdiff{
 		ID:        diff.ID,
 		Branch:    branchName,
 		StackedOn: stackedOn,
@@ -167,7 +163,7 @@ func (diff *Diff) syncNew(ctx context.Context, commit string) error {
 		return err
 	}
 
-	dbDiff, err := diff.client.db.GetDiff(ctx, diff.ID)
+	dbDiff, err := client.db.GetDiff(ctx, diff.ID)
 	if err != nil {
 		return err
 	}
@@ -177,22 +173,15 @@ func (diff *Diff) syncNew(ctx context.Context, commit string) error {
 }
 
 func (diff *Diff) syncSaved(ctx context.Context, commit string) error {
-	baseRef := fmt.Sprintf("origin/%s", diff.client.DefaultBranch())
+	baseRef := fmt.Sprintf("origin/%s", client.config.DefaultBranch)
 
 	stackedOnDiff, err := diff.StackedOn(ctx)
 	if stackedOnDiff != nil {
-		if merged, err := stackedOnDiff.IsMerged(); err != nil {
-			return err
-		} else if merged {
-			fmt.Println("stacked diff has already been merged")
-		} else {
-			if stackedOnDiff.IsSaved() == false {
-				return fmt.Errorf("stacked diff hasn't been synced")
-			}
-
-			fmt.Printf("stacked on %s\n", stackedOnDiff.DBInstance.ID)
-			baseRef = stackedOnDiff.DBInstance.Branch
+		if stackedOnDiff.IsSaved() == false {
+			return fmt.Errorf("stacked diff hasn't been synced")
 		}
+
+		baseRef = stackedOnDiff.DBInstance.Branch
 	}
 
 	err = diff.SyncCommitToBranch(ctx, commit, diff.DBInstance.Branch, baseRef)
@@ -318,7 +307,7 @@ func (diff *Diff) CreatePR(ctx context.Context) error {
 		return err
 	}
 
-	baseRef := diff.client.DefaultBranch()
+	baseRef := client.config.DefaultBranch
 	stackedOn, err := diff.StackedOn(ctx)
 	if err != nil {
 		return err
@@ -407,9 +396,9 @@ func (diff *Diff) GetDependantDiffs(ctx context.Context) ([]*Diff, error) {
 
 func (diff *Diff) generateBranchName() (string, error) {
 	var commit string
-	commit, err := diff.GetCommit()
-	if err != nil {
-		return commit, err
+	commit = diff.GetCommit()
+	if commit == "" {
+		panic(fmt.Errorf("can't find commit for diff %s", diff.ID))
 	}
 
 	branchName, err := runCommand(
@@ -432,37 +421,30 @@ func (diff *Diff) generateBranchName() (string, error) {
 }
 
 // GetCommit .
-func (diff *Diff) GetCommit() (string, error) {
+func (diff *Diff) GetCommit() string {
 	if diff.Commit != "" {
-		return diff.Commit, nil
+		return diff.Commit
 	}
 	// Find the commit of the current diff
 	// Note: this can and will change as diffs get rebased regularly
 
 	// Loop through all commits between HEAD and base branch
-	commits, err := runCommand(
+	commits := mustCommand(
 		exec.Command(
 			"git",
 			"rev-list",
 			"--reverse",
-			fmt.Sprintf("origin/%s...HEAD", Client.config.defaultBranch),
+			fmt.Sprintf("origin/%s...HEAD", client.config.DefaultBranch),
 		),
 		true,
 		false,
 	)
-	if err != nil {
-		return "", err
-	}
 
 	lines := strings.Split(commits, "\n")
 	var commit string
 	// TODO raise error if multiple diff ids found
 	for _, line := range lines {
-		diffID, err := diffIDFromCommit(line)
-		if err != nil {
-			// Ignore errors
-			continue
-		}
+		diffID := diffIDFromCommit(line)
 		if diffID == diff.ID {
 			commit = line
 			break
@@ -470,19 +452,19 @@ func (diff *Diff) GetCommit() (string, error) {
 	}
 
 	if commit == "" {
-		return commit, fmt.Errorf("can't find commit for diff %s", diff.ID)
+		return commit
 	}
 
 	diff.Commit = commit
 
-	return commit, nil
+	return commit
 }
 
 // GetSubject .
 func (diff *Diff) GetSubject() string {
-	commit, err := diff.GetCommit()
-	if err != nil {
-		panic(err.Error())
+	commit := diff.GetCommit()
+	if commit == "" {
+		panic(fmt.Errorf("can't find commit for diff %s", diff.ID))
 	}
 
 	subject := mustCommand(
@@ -501,9 +483,9 @@ func (diff *Diff) GetSubject() string {
 
 // GetBody .
 func (diff *Diff) GetBody() string {
-	commit, err := diff.GetCommit()
-	if err != nil {
-		panic(err.Error())
+	commit := diff.GetCommit()
+	if commit == "" {
+		panic(fmt.Errorf("can't find commit for diff %s", diff.ID))
 	}
 
 	subject := mustCommand(
@@ -526,13 +508,11 @@ func (diff *Diff) GetBranch() string {
 }
 
 // IsMerged returns true if the diff has already been merged
-func (diff *Diff) IsMerged() (bool, error) {
-	commit, err := diff.GetCommit()
-	if err != nil {
-		return false, err
+func (diff *Diff) IsMerged() bool {
+	commit := diff.GetCommit()
+	if commit == "" {
+		return true
 	}
-
-	c := diff.client
 
 	// check if diff has already been merged
 	// https://git-scm.com/docs/git-cherry
@@ -540,17 +520,17 @@ func (diff *Diff) IsMerged() (bool, error) {
 		exec.Command(
 			"bash",
 			"-c",
-			fmt.Sprintf("git cherry origin/%s %s | grep '+' | wc -l", c.DefaultBranch(), commit),
+			fmt.Sprintf("git cherry origin/%s %s | grep '+' | wc -l", client.config.DefaultBranch, commit),
 		),
 		true,
 		false,
 	)
 
 	if numCommits == "0" {
-		return true, nil
+		return true
 	}
 
-	return false, nil
+	return false
 }
 
 // IsSaved returns true if the diff has been persisted to the db
@@ -582,15 +562,12 @@ func (diff *Diff) StackedOn(ctx context.Context) (*Diff, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if stackedOnDiff.IsSaved() == false {
 		return nil, fmt.Errorf("diff hasn't been synced: %s", stackedOnDiff.ID)
 	}
 
-	merged, err := stackedOnDiff.IsMerged()
-	if err != nil {
-		return nil, err
-	}
-
+	merged := stackedOnDiff.IsMerged()
 	if merged == true {
 		return nil, nil
 	}
@@ -603,7 +580,7 @@ func (diff *Diff) ChildDiff(ctx context.Context) (*Diff, error) {
 		return nil, fmt.Errorf("diff hasn't been synced: %s", diff.ID)
 	}
 
-	childDiff, err := Client.db.GetChildDiff(ctx, diff.ID)
+	childDiff, err := client.db.GetChildDiff(ctx, diff.ID)
 	if err != nil {
 		if err != sql.ErrNoRows {
 			return nil, err
@@ -624,7 +601,7 @@ func (diff *Diff) ChildDiff(ctx context.Context) (*Diff, error) {
 
 // newDiffFromID .
 func newDiffFromID(ctx context.Context, diffID string) (*Diff, error) {
-	instance, err := Client.db.GetDiff(ctx, diffID)
+	instance, err := client.db.GetDiff(ctx, diffID)
 	if err != nil {
 		if err != sql.ErrNoRows {
 			return nil, err
@@ -640,20 +617,14 @@ func newDiffFromID(ctx context.Context, diffID string) (*Diff, error) {
 // newDiffFromCommit .
 func newDiffFromCommit(ctx context.Context, commit string) (*Diff, error) {
 	// Check that commit is valid
-	_, err := runCommand(
+	mustCommand(
 		exec.Command("git", "cat-file", "-e", commit),
 		false,
 		false,
 	)
-	if err != nil {
-		return nil, err
-	}
 
 	// Find diff trailer
-	diffID, err := diffIDFromCommit(commit)
-	if err != nil {
-		return nil, err
-	}
+	diffID := diffIDFromCommit(commit)
 
 	if diffID == "" {
 		return nil, fmt.Errorf("commit is missing a DiffID")

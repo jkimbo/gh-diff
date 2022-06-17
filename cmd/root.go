@@ -18,13 +18,13 @@ func check(err error) {
 		if os.Getenv("GH_DIFF_DEBUG") == "1" {
 			panic(err)
 		}
-		fmt.Printf("error: %s\n", err)
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "gh-diff",
+	Use:   "gh-diff <commit_sha>",
 	Short: "Stacked diffs 📚",
 	Run: func(cmd *cobra.Command, args []string) {
 		var err error
@@ -33,8 +33,6 @@ var rootCmd = &cobra.Command{
 		ctx := context.Background()
 
 		c := diff.NewClient()
-		err = c.Setup(ctx)
-		check(err)
 
 		if len(args) == 0 {
 			// TODO list recent diffs
@@ -42,8 +40,21 @@ var rootCmd = &cobra.Command{
 
 		commit := args[0]
 
-		err = c.SyncDiff(ctx, commit)
-		check(err)
+		switch commit {
+		case "init":
+			err = c.Init(ctx)
+			check(err)
+		case "land":
+			err = c.Setup(ctx)
+			check(err)
+			err = c.LandDiff(ctx, commit)
+			check(err)
+		default:
+			err = c.Setup(ctx)
+			check(err)
+			err = c.SyncDiff(ctx, commit)
+			check(err)
+		}
 
 		return
 	},
