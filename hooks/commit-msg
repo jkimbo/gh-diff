@@ -52,8 +52,8 @@ fi
 # Avoid the --in-place option which only appeared in Git 2.8
 # Avoid the --if-exists option which only appeared in Git 2.15
 if ! git -c trailer.ifexists=doNothing interpret-trailers \
-      --trailer "DiffID: d${random}" < "$1" > "${dest}" ; then
-  echo "cannot insert DiffID line in $1"
+      --trailer "Diff-Id: ${random}" < "$1" > "${dest}" ; then
+  echo "cannot insert Diff-Id line in $1"
   exit 1
 fi
 

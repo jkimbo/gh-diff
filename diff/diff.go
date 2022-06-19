@@ -29,6 +29,10 @@ func diffIDFromCommit(commit string) string {
 	// TODO raise error if multiple diff ids found
 	for _, line := range lines {
 		kv := strings.Split(strings.TrimSpace(line), ":")
+		if kv[0] == "Diff-Id" {
+			diffID = strings.TrimSpace(kv[1])
+			break
+		}
 		if kv[0] == "DiffID" {
 			diffID = strings.TrimSpace(kv[1])
 			break
@@ -603,7 +607,7 @@ func newDiffFromCommit(ctx context.Context, commit string) (*diff, error) {
 	diffID := diffIDFromCommit(commit)
 
 	if diffID == "" {
-		return nil, fmt.Errorf("commit is missing a DiffID")
+		return nil, fmt.Errorf("commit is missing a Diff-Id")
 	}
 
 	instance, err := client.db.getDiff(ctx, diffID)
