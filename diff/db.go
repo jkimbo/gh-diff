@@ -103,6 +103,9 @@ func (db *SQLDB) getChildDiff(ctx context.Context, diffID string) (*dbdiff, erro
 	}
 	var diff dbdiff
 	if err := db.DB.Get(&diff, query, args...); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return &diff, nil

@@ -49,7 +49,6 @@ type diff struct {
 	branch       string
 	prNumber     string
 	parentDiffID string
-	// DBInstance   *dbdiff
 }
 
 // Sync .
@@ -320,7 +319,12 @@ func (d *diff) CreatePR(ctx context.Context) error {
 		baseRef = stackedOn.branch
 	}
 
-	fmt.Printf("\nCreate a PR 🔽\n\thttps://github.com/frontedxyz/synthwave/compare/%s...%s\n\n", baseRef, d.branch)
+	repoURL := mustCommand(
+		exec.Command("gh", "repo", "view", "--json=url", "--jq=.url"),
+		true,
+		false,
+	)
+	fmt.Printf("\nCreate a PR 🔽\n\t%s/compare/%s...%s\n\n", repoURL, baseRef, d.branch)
 
 	fmt.Printf("----\n")
 
