@@ -23,7 +23,7 @@ func check(err error) {
 
 var seededRand *rand.Rand = rand.New(rand.NewSource(time.Now().UnixNano()))
 
-func RandomString(n int) string {
+func randomString(n int) string {
 	letters := "abcdefghijklmnopqrstuvwxyz1234567890"
 	b := make([]byte, n)
 	for i := range b {

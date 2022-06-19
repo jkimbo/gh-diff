@@ -153,7 +153,7 @@ func (d *diff) syncNew(ctx context.Context, commit string) error {
 
 	fmt.Printf("syncing %s to branch %s (base: %s)\n", commit, branchName, baseRef)
 
-	err = d.SyncCommitToBranch(ctx, commit, branchName, baseRef)
+	err = d.syncCommitToBranch(ctx, commit, branchName, baseRef)
 	if err != nil {
 		return err
 	}
@@ -186,7 +186,7 @@ func (d *diff) syncSaved(ctx context.Context, commit string) error {
 		baseRef = stackedOnDiff.branch
 	}
 
-	err = d.SyncCommitToBranch(ctx, commit, d.branch, baseRef)
+	err = d.syncCommitToBranch(ctx, commit, d.branch, baseRef)
 	if err != nil {
 		return err
 	}
@@ -202,8 +202,7 @@ func (d *diff) getStack(ctx context.Context) (*stack, error) {
 	return st, nil
 }
 
-// SyncCommitToBranch .
-func (d *diff) SyncCommitToBranch(ctx context.Context, commit, branchName, baseRef string) error {
+func (d *diff) syncCommitToBranch(ctx context.Context, commit, branchName, baseRef string) error {
 	var err error
 	commitDate := mustCommand(
 		exec.Command(
@@ -302,8 +301,7 @@ func (d *diff) SyncCommitToBranch(ctx context.Context, commit, branchName, baseR
 	return nil
 }
 
-// CreatePR .
-func (d *diff) CreatePR(ctx context.Context) error {
+func (d *diff) createPR(ctx context.Context) error {
 	st, err := d.getStack(ctx)
 	if err != nil {
 		return err
@@ -355,8 +353,7 @@ func (d *diff) CreatePR(ctx context.Context) error {
 	return nil
 }
 
-// UpdatePRDescription .
-func (d *diff) UpdatePRDescription(ctx context.Context) error {
+func (d *diff) updatePRDescription(ctx context.Context) error {
 	st, err := d.getStack(ctx)
 	if err != nil {
 		return err
@@ -391,8 +388,7 @@ func (d *diff) UpdatePRDescription(ctx context.Context) error {
 	return nil
 }
 
-// GetDependantDiffs .
-func (d *diff) GetDependantDiffs(ctx context.Context) ([]*diff, error) {
+func (d *diff) getDependantDiffs(ctx context.Context) ([]*diff, error) {
 	st, err := d.getStack(ctx)
 	if err != nil {
 		return nil, err

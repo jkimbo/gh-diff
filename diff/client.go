@@ -49,11 +49,11 @@ func (c *Diffclient) SyncDiff(ctx context.Context, commit string) error {
 	check(err)
 
 	if d.prNumber == "" {
-		err = d.CreatePR(ctx)
+		err = d.createPR(ctx)
 		check(err)
 	}
 
-	dependantDiffs, err := d.GetDependantDiffs(ctx)
+	dependantDiffs, err := d.getDependantDiffs(ctx)
 	check(err)
 
 	if len(dependantDiffs) > 0 {
