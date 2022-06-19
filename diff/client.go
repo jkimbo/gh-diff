@@ -14,17 +14,19 @@ import (
 	"strings"
 )
 
-var client *diffclient
+var client *Diffclient
 
-type diffclient struct {
+// Diffclient .
+type Diffclient struct {
 	db     *SQLDB
 	config *config
 }
 
-func (c *diffclient) Setup(ctx context.Context) error {
+// Setup loads the DB and config
+func (c *Diffclient) Setup(ctx context.Context) error {
 	sqlDB, err := NewDB(ctx, filepath.Join(".diff", "main.db"))
 	if err != nil {
-		return fmt.Errorf("Unable to connect to database: %v\n", err)
+		return fmt.Errorf("unable to connect to database: %v", err)
 	}
 	c.db = sqlDB
 
@@ -36,16 +38,17 @@ func (c *diffclient) Setup(ctx context.Context) error {
 	return nil
 }
 
-func (c *diffclient) SyncDiff(ctx context.Context, commit string) error {
+// SyncDiff syncs a diff (and it's dependant diffs) to the remote
+func (c *Diffclient) SyncDiff(ctx context.Context, commit string) error {
 	d, err := newDiffFromCommit(ctx, commit)
 	check(err)
 
-	fmt.Printf("syncing diff: %s (%s)\n", d.GetSubject(), d.ID)
+	fmt.Printf("syncing diff: %s (%s)\n", d.getSubject(), d.id)
 
 	err = d.Sync(ctx)
 	check(err)
 
-	if d.HasPR() == false {
+	if d.prNumber == "" {
 		err = d.CreatePR(ctx)
 		check(err)
 	}
@@ -57,7 +60,7 @@ func (c *diffclient) SyncDiff(ctx context.Context, commit string) error {
 		fmt.Printf("%d dependant diffs to sync\n", len(dependantDiffs))
 
 		for _, dependantDiff := range dependantDiffs {
-			fmt.Printf("syncing dependant diff: %s (%s)\n", dependantDiff.GetSubject(), dependantDiff.ID)
+			fmt.Printf("syncing dependant diff: %s (%s)\n", dependantDiff.getSubject(), dependantDiff.id)
 			err = dependantDiff.Sync(ctx)
 			check(err)
 		}
@@ -68,7 +71,8 @@ func (c *diffclient) SyncDiff(ctx context.Context, commit string) error {
 	return nil
 }
 
-func (c *diffclient) Init(ctx context.Context) error {
+// Init initialises the db and setups up the config
+func (c *Diffclient) Init(ctx context.Context) error {
 	// find root path
 	path, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
 	if err != nil {
@@ -143,29 +147,31 @@ func (c *diffclient) Init(ctx context.Context) error {
 	return nil
 }
 
-func (c *diffclient) LandDiff(ctx context.Context, commit string) error {
-	diff, err := newDiffFromCommit(ctx, commit)
+// LandDiff merges the PR for a diff into main branch and syncs all dependant
+// diffs
+func (c *Diffclient) LandDiff(ctx context.Context, commit string) error {
+	d, err := newDiffFromCommit(ctx, commit)
 	check(err)
 
-	isMerged := diff.IsMerged()
+	isMerged := d.isMerged()
 	if isMerged == true {
 		log.Fatalf("commit already landed")
 	}
 
 	// Make sure that diff is not dependant on another diff that hasn't landed
 	// yet
-	stackedOnDiff, err := diff.StackedOn(ctx)
+	stackedOnDiff, err := d.parentDiff(ctx)
 	check(err)
 	if stackedOnDiff != nil {
-		isMerged := stackedOnDiff.IsMerged()
+		isMerged := stackedOnDiff.isMerged()
 		if !isMerged {
-			fmt.Printf("Diff is stacked on %s that hasn't landed yet\n", diff.DBInstance.StackedOn)
+			fmt.Printf("Diff is stacked on %s that hasn't landed yet\n", stackedOnDiff.id)
 			os.Exit(1)
 		}
 	}
 
-	if diff.DBInstance.PRNumber == "" {
-		fmt.Printf("Diff %s doesn't have a PR number\n", diff.ID)
+	if d.prNumber == "" {
+		fmt.Printf("Diff %s doesn't have a PR number\n", d.id)
 		os.Exit(1)
 		return nil
 	}
@@ -175,7 +181,7 @@ func (c *diffclient) LandDiff(ctx context.Context, commit string) error {
 	// Merge PR
 	_, _, err = ghCommand(
 		[]string{
-			"pr", "merge", diff.DBInstance.PRNumber, "--squash",
+			"pr", "merge", d.prNumber, "--squash",
 		},
 	)
 
@@ -207,7 +213,8 @@ func (c *diffclient) LandDiff(ctx context.Context, commit string) error {
 	return nil
 }
 
-func NewClient() *diffclient {
-	client = &diffclient{}
+// NewClient creates a new diff client
+func NewClient() *Diffclient {
+	client = &Diffclient{}
 	return client
 }

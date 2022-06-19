@@ -2,13 +2,14 @@ package diff
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/Masterminds/squirrel"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3" // so that sqlx works with sqlite
 )
 
-const SCHEMA = `
+const schema = `
 	CREATE TABLE IF NOT EXISTS diffs (
 		id TEXT PRIMARY KEY,
 		branch TEXT,
@@ -54,8 +55,7 @@ func NewDB(ctx context.Context, filepath string) (*SQLDB, error) {
 	}, nil
 }
 
-// GetDiff .
-func (db *SQLDB) GetDiff(ctx context.Context, diffID string) (*dbdiff, error) {
+func (db *SQLDB) getDiff(ctx context.Context, diffID string) (*dbdiff, error) {
 	query, args, err := db.StatementBuilder.Select("*").From("diffs").
 		Where("id = ?", diffID).ToSql()
 	if err != nil {
@@ -63,13 +63,15 @@ func (db *SQLDB) GetDiff(ctx context.Context, diffID string) (*dbdiff, error) {
 	}
 	var diff dbdiff
 	if err := db.DB.Get(&diff, query, args...); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
 		return nil, err
 	}
 	return &diff, nil
 }
 
-// CreateDiff .
-func (db *SQLDB) CreateDiff(ctx context.Context, diff *dbdiff) error {
+func (db *SQLDB) createDiff(ctx context.Context, diff *dbdiff) error {
 	statement := db.StatementBuilder.Insert("diffs").
 		Columns(
 			"id",
@@ -93,8 +95,7 @@ func (db *SQLDB) CreateDiff(ctx context.Context, diff *dbdiff) error {
 	return err
 }
 
-// GetChildDiff .
-func (db *SQLDB) GetChildDiff(ctx context.Context, diffID string) (*dbdiff, error) {
+func (db *SQLDB) getChildDiff(ctx context.Context, diffID string) (*dbdiff, error) {
 	query, args, err := db.StatementBuilder.Select("*").From("diffs").
 		Where("stacked_on = ?", diffID).ToSql()
 	if err != nil {
@@ -107,7 +108,7 @@ func (db *SQLDB) GetChildDiff(ctx context.Context, diffID string) (*dbdiff, erro
 	return &diff, nil
 }
 
-func (db *SQLDB) RemoveDiff(ctx context.Context, diffID string) error {
+func (db *SQLDB) removeDiff(ctx context.Context, diffID string) error {
 	query, args, err := db.StatementBuilder.Delete("diffs").
 		Where("id = ?", diffID).ToSql()
 	if err != nil {
@@ -120,6 +121,6 @@ func (db *SQLDB) RemoveDiff(ctx context.Context, diffID string) error {
 // Init setups up the database schema
 func (db *SQLDB) Init(ctx context.Context) error {
 	// execute a query on the server
-	_, err := db.DB.Exec(SCHEMA)
+	_, err := db.DB.Exec(schema)
 	return err
 }
