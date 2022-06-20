@@ -153,21 +153,13 @@ func (c *Diffclient) LandDiff(ctx context.Context, commit string) error {
 	d, err := newDiffFromCommit(ctx, commit)
 	check(err)
 
-	isMerged := d.isMerged()
-	if isMerged == true {
-		log.Fatalf("commit already landed")
-	}
-
 	// Make sure that diff is not dependant on another diff that hasn't landed
 	// yet
 	stackedOnDiff, err := d.parentDiff(ctx)
 	check(err)
-	if stackedOnDiff != nil {
-		isMerged := stackedOnDiff.isMerged()
-		if !isMerged {
-			fmt.Printf("Diff is stacked on %s that hasn't landed yet\n", stackedOnDiff.id)
-			os.Exit(1)
-		}
+	if stackedOnDiff != nil && stackedOnDiff.commit != "" {
+		fmt.Printf("Diff is stacked on %s that hasn't landed yet\n", stackedOnDiff.id)
+		os.Exit(1)
 	}
 
 	if d.prNumber == "" {

@@ -117,7 +117,7 @@ func (d *diff) syncNew(ctx context.Context, commit string) error {
 
 	if parentDiffID != "" {
 		fmt.Println("parent commit is a diff")
-		parentDiff, err := newDiffFromID(ctx, parentDiffID)
+		parentDiff, err := newDiffFromCommit(ctx, parentCommit)
 		if err != nil {
 			return err
 		}
@@ -125,28 +125,23 @@ func (d *diff) syncNew(ctx context.Context, commit string) error {
 		// If the parent diff hasn't been saved then assume the baseRef is the
 		// default branch
 		if parentDiff.isSaved() == true {
-			merged := parentDiff.isMerged()
-			if merged {
-				fmt.Println("parent commit has already been merged")
-			} else {
-				stackChanges := false
-				prompt := &survey.Confirm{
-					Message: fmt.Sprintf(
-						"Stack your changes on \"[%s] %s\"?",
-						parentDiff.id, parentDiff.getSubject(),
-					),
+			stackChanges := false
+			prompt := &survey.Confirm{
+				Message: fmt.Sprintf(
+					"Stack your changes on \"[%s] %s\"?",
+					parentDiff.id, parentDiff.getSubject(),
+				),
+			}
+			err := survey.AskOne(prompt, &stackChanges)
+			if err != nil {
+				if err == terminal.InterruptErr {
+					os.Exit(1)
 				}
-				err := survey.AskOne(prompt, &stackChanges)
-				if err != nil {
-					if err == terminal.InterruptErr {
-						os.Exit(1)
-					}
-					log.Fatalf("err: %s", err)
-				}
-				if stackChanges == true {
-					baseRef = parentDiff.branch
-					stackedOn = parentDiff.id
-				}
+				log.Fatalf("err: %s", err)
+			}
+			if stackChanges == true {
+				baseRef = parentDiff.branch
+				stackedOn = parentDiff.id
 			}
 		}
 	}
@@ -460,32 +455,6 @@ func (d *diff) getBody() string {
 		false,
 	)
 	return subject
-}
-
-// IsMerged returns true if the diff has already been merged
-func (d *diff) isMerged() bool {
-	commit := d.commit
-	if commit == "" {
-		return true
-	}
-
-	// check if diff has already been merged
-	// https://git-scm.com/docs/git-cherry
-	numCommits := mustCommand(
-		exec.Command(
-			"bash",
-			"-c",
-			fmt.Sprintf("git cherry origin/%s %s | grep '+' | wc -l", client.config.DefaultBranch, commit),
-		),
-		true,
-		false,
-	)
-
-	if numCommits == "0" {
-		return true
-	}
-
-	return false
 }
 
 func (d *diff) isSaved() bool {
