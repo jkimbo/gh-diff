@@ -173,7 +173,7 @@ func (d *diff) syncSaved(ctx context.Context, commit string) error {
 	baseRef := fmt.Sprintf("origin/%s", client.config.DefaultBranch)
 
 	stackedOnDiff, err := d.parentDiff(ctx)
-	if stackedOnDiff != nil {
+	if stackedOnDiff != nil && stackedOnDiff.commit != "" {
 		if stackedOnDiff.isSaved() == false {
 			return fmt.Errorf("stacked diff hasn't been synced")
 		}
@@ -297,9 +297,8 @@ func (d *diff) syncCommitToBranch(ctx context.Context, commit, branchName, baseR
 }
 
 func (d *diff) createPR(ctx context.Context) error {
-	st, err := d.getStack(ctx)
-	if err != nil {
-		return err
+	if d.branch == "" {
+		return fmt.Errorf("diff doesn't have a branch name")
 	}
 
 	baseRef := client.config.DefaultBranch
@@ -312,40 +311,64 @@ func (d *diff) createPR(ctx context.Context) error {
 		baseRef = stackedOn.branch
 	}
 
-	repoURL := mustCommand(
-		exec.Command("gh", "repo", "view", "--json=url", "--jq=.url"),
-		true,
-		false,
-	)
-	fmt.Printf("\nCreate a PR 🔽\n\t%s/compare/%s...%s\n\n", repoURL, baseRef, d.branch)
-
-	fmt.Printf("----\n")
-
 	title := d.getSubject()
+	body := d.getBody()
 
-	if st.size() > 1 {
-		index := st.getIndex(d)
-		title += fmt.Sprintf(" (%d/%d)", index+1, st.size())
-	}
-	fmt.Printf("Title: %s\n", title)
-
-	var body strings.Builder
-	body.WriteString("Body:\n")
-	body.WriteString(fmt.Sprintf("%s\n", d.getBody()))
-
-	table, err := st.buildTable()
+	prNumber, err := createPR(
+		baseRef,
+		d.branch,
+		title,
+		body,
+	)
 	if err != nil {
-		log.Fatalf("err: %v\n", err)
-	}
-	if table != "" {
-		body.WriteString(fmt.Sprintf("%s", table))
+		return err
 	}
 
-	fmt.Println(body.String())
-
-	fmt.Printf("----\n")
+	d.prNumber = prNumber
+	// update db
+	err = client.db.updatePrNumber(ctx, d.id, d.prNumber)
+	if err != nil {
+		return err
+	}
 
 	return nil
+
+	/*
+		repoURL := mustCommand(
+			exec.Command("gh", "repo", "view", "--json=url", "--jq=.url"),
+			true,
+			false,
+		)
+		fmt.Printf("\nCreate a PR 🔽\n\t%s/compare/%s...%s\n\n", repoURL, baseRef, d.branch)
+
+		fmt.Printf("----\n")
+
+		title := d.getSubject()
+
+		if st.size() > 1 {
+			index := st.getIndex(d)
+			title += fmt.Sprintf(" (%d/%d)", index+1, st.size())
+		}
+		fmt.Printf("Title: %s\n", title)
+
+		var body strings.Builder
+		body.WriteString("Body:\n")
+		body.WriteString(fmt.Sprintf("%s\n", d.getBody()))
+
+		table, err := st.buildTable()
+		if err != nil {
+			log.Fatalf("err: %v\n", err)
+		}
+		if table != "" {
+			body.WriteString(fmt.Sprintf("%s", table))
+		}
+
+		fmt.Println(body.String())
+
+		fmt.Printf("----\n")
+
+		return nil
+	*/
 }
 
 func (d *diff) updatePRDescription(ctx context.Context) error {

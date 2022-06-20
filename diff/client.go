@@ -12,14 +12,18 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/cli/go-gh"
+	"github.com/cli/go-gh/pkg/api"
 )
 
 var client *Diffclient
 
 // Diffclient .
 type Diffclient struct {
-	db     *SQLDB
-	config *config
+	db       *SQLDB
+	config   *config
+	ghClient api.GQLClient
 }
 
 // Setup loads the DB and config
@@ -49,8 +53,16 @@ func (c *Diffclient) SyncDiff(ctx context.Context, commit string) error {
 	check(err)
 
 	if d.prNumber == "" {
+		fmt.Printf("creating PR for diff\n")
 		err = d.createPR(ctx)
 		check(err)
+
+		repoURL := mustCommand(
+			exec.Command("gh", "repo", "view", "--json=url", "--jq=.url"),
+			true,
+			false,
+		)
+		fmt.Printf("\nPR created: %s/pull/%s\n\n", repoURL, d.prNumber)
 	}
 
 	dependantDiffs, err := d.getDependantDiffs(ctx)
@@ -66,7 +78,14 @@ func (c *Diffclient) SyncDiff(ctx context.Context, commit string) error {
 		}
 	}
 
-	// TODO update all PR descriptions and titles in the stack
+	st, err := d.getStack(ctx)
+	if err != nil {
+		return err
+	}
+
+	if st.size() > 1 {
+		// TODO update all PR descriptions and titles in the stack
+	}
 
 	return nil
 }
@@ -207,6 +226,11 @@ func (c *Diffclient) LandDiff(ctx context.Context, commit string) error {
 
 // NewClient creates a new diff client
 func NewClient() *Diffclient {
-	client = &Diffclient{}
+	// create github client
+	ghClient, err := gh.GQLClient(nil)
+	check(err)
+	client = &Diffclient{
+		ghClient: ghClient,
+	}
 	return client
 }

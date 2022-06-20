@@ -95,6 +95,20 @@ func (db *SQLDB) createDiff(ctx context.Context, diff *dbdiff) error {
 	return err
 }
 
+func (db *SQLDB) updatePrNumber(ctx context.Context, diffID, prNumber string) error {
+	statement := db.StatementBuilder.Update("diffs").
+		Set("pr_number", prNumber).
+		Where("id = ?", diffID)
+
+	query, args, err := statement.ToSql()
+	if err != nil {
+		return err
+	}
+
+	_, err = db.DB.ExecContext(ctx, query, args...)
+	return err
+}
+
 func (db *SQLDB) getChildDiff(ctx context.Context, diffID string) (*dbdiff, error) {
 	query, args, err := db.StatementBuilder.Select("*").From("diffs").
 		Where("stacked_on = ?", diffID).ToSql()
