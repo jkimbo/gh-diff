@@ -50,7 +50,11 @@ func (st *stack) buildTable() (string, error) {
 
 	for _, diff := range st.diffs {
 		// TODO get subject from PR description
-		sb.WriteString(fmt.Sprintf("| #%s | %s |\n", "", diff.getSubject()))
+		if diff.commit == "" {
+			sb.WriteString(fmt.Sprintf("| #%s | %s |\n", "", "TODO"))
+		} else {
+			sb.WriteString(fmt.Sprintf("| #%s | %s |\n", "", diff.getSubject()))
+		}
 	}
 	return sb.String(), nil
 }
@@ -73,18 +77,7 @@ func newStackFromDiff(ctx context.Context, d *diff) (*stack, error) {
 			break
 		}
 
-		commit := parent.commit
-		if commit == "" {
-			// if we can't find the commit for a diff then that diff is no longer part
-			// of the stack and we should remove it
-			err := client.db.removeDiff(ctx, parent.id)
-			if err != nil {
-				return nil, err
-			}
-			fmt.Printf("removed diff %s\n", parent.id)
-		} else {
-			parents = append(parents, parent)
-		}
+		parents = append(parents, parent)
 
 		currDiff = parent
 
@@ -111,18 +104,7 @@ func newStackFromDiff(ctx context.Context, d *diff) (*stack, error) {
 			break
 		}
 
-		commit := child.commit
-		if commit == "" {
-			// if we can't find the commit for a diff then that diff is no longer part
-			// of the stack and we should remove it
-			err := client.db.removeDiff(ctx, child.id)
-			if err != nil {
-				return nil, err
-			}
-			fmt.Printf("removed diff %s\n", child.id)
-		} else {
-			children = append(children, child)
-		}
+		children = append(children, child)
 
 		currDiff = child
 
@@ -133,6 +115,11 @@ func newStackFromDiff(ctx context.Context, d *diff) (*stack, error) {
 	diffs = append(diffs, reversedParents...)
 	diffs = append(diffs, d)
 	diffs = append(diffs, children...)
+
+	// TODO: run through all diffs to make sure stack is consistent
+	// e.g. if there are diffs that are missing commits in the middle of the stack
+	// that means that they were removed or combined with other diffs. In that
+	// case we'll have to change where the diffs are pointing to
 
 	return &stack{
 		diffs: diffs,

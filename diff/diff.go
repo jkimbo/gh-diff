@@ -313,7 +313,7 @@ func (d *diff) createPR(ctx context.Context) error {
 		return err
 	}
 
-	if stackedOn != nil {
+	if stackedOn != nil && stackedOn.commit != "" {
 		baseRef = stackedOn.branch
 	}
 
@@ -509,14 +509,6 @@ func (d *diff) parentDiff(ctx context.Context) (*diff, error) {
 		return nil, err
 	}
 
-	if stackedOnDiff.isSaved() == false {
-		return nil, fmt.Errorf("diff hasn't been synced: %s", stackedOnDiff.id)
-	}
-
-	merged := stackedOnDiff.isMerged()
-	if merged == true {
-		return nil, nil
-	}
 	return stackedOnDiff, nil
 }
 
@@ -530,14 +522,15 @@ func (d *diff) childDiff(ctx context.Context) (*diff, error) {
 		return nil, err
 	}
 
-	if childDiff != nil {
-		child, err := newDiffFromID(ctx, childDiff.ID)
-		if err != nil {
-			return nil, err
-		}
-		return child, nil
+	if childDiff == nil {
+		return nil, nil
 	}
-	return nil, nil
+
+	child, err := newDiffFromID(ctx, childDiff.ID)
+	if err != nil {
+		return nil, err
+	}
+	return child, nil
 }
 
 func newDiffFromID(ctx context.Context, diffID string) (*diff, error) {
@@ -566,12 +559,7 @@ func newDiffFromID(ctx context.Context, diffID string) (*diff, error) {
 		}
 	}
 
-	// if we can't find the commit for a diff then that probably
-	// means the diff was merged or the diff was removed. Either way the diff no
-	// longer exists
-	if commit == "" {
-		return nil, nil
-	}
+	// Note: commit might be an empty string if the was merged or removed
 
 	instance, err := client.db.getDiff(ctx, diffID)
 	if err != nil {
