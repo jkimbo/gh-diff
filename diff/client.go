@@ -13,8 +13,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/list"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/cli/go-gh"
 	"github.com/cli/go-gh/pkg/api"
+	"github.com/jkimbo/gh-diff/tui"
 )
 
 var client *Diffclient
@@ -227,6 +230,67 @@ func (c *Diffclient) LandDiff(ctx context.Context, commit string) error {
 	}
 
 	return nil
+}
+
+func (c *Diffclient) ListDiffs(ctx context.Context) (string, error) {
+	repoURL := mustCommand(
+		exec.Command("gh", "repo", "view", "--json=url", "--jq=.url"),
+		true,
+		false,
+	)
+
+	// get all commits from HEAD to defaultBranch
+	commits := mustCommand(
+		exec.Command(
+			"git",
+			"rev-list",
+			fmt.Sprintf("origin/%s...HEAD", client.config.DefaultBranch),
+		),
+		true,
+		false,
+	)
+	lines := strings.Split(commits, "\n")
+
+	items := []list.Item{}
+
+	for _, commit := range lines {
+		id := diffIDFromCommit(commit)
+		if id == "" {
+			// TODO
+		} else {
+			diff, err := newDiffFromCommit(ctx, commit)
+			check(err)
+
+			item := tui.Item{
+				ID:      diff.id,
+				Commit:  diff.commit,
+				Subject: diff.getSubject(),
+			}
+			if diff.prNumber != "" {
+				item.PrLink = fmt.Sprintf("%s/pulls/%s", repoURL, diff.prNumber)
+			}
+			items = append(items, item)
+		}
+	}
+
+	p := tea.NewProgram(tui.NewModel(items))
+
+	m, err := p.StartReturningModel()
+	if err != nil {
+		fmt.Println("Error running program:", err)
+		os.Exit(1)
+	}
+
+	if m, ok := m.(tui.Model); ok {
+		choice := m.GetChoice()
+		i, ok := choice.(tui.Item)
+		if !ok {
+			return "", nil
+		}
+		return i.Commit, nil
+	}
+
+	return "", nil
 }
 
 // NewClient creates a new diff client

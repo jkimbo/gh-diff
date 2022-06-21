@@ -34,6 +34,18 @@ var rootCmd = &cobra.Command{
 
 		if len(args) == 0 {
 			// TODO list recent diffs
+			err = c.Setup(ctx)
+			check(err)
+			commit, err := c.ListDiffs(ctx)
+			check(err)
+
+			if commit != "" {
+				err = c.SyncDiff(ctx, commit)
+				check(err)
+				return
+			}
+
+			return
 		}
 
 		commit := args[0]
