@@ -258,16 +258,29 @@ func (c *Diffclient) ListDiffs(ctx context.Context) (string, error) {
 		if id == "" {
 			// TODO
 		} else {
-			diff, err := newDiffFromCommit(ctx, commit)
+			d, err := newDiffFromCommit(ctx, commit)
 			check(err)
 
-			item := tui.Item{
-				ID:      diff.id,
-				Commit:  diff.commit,
-				Subject: diff.getSubject(),
+			var isStacked bool
+			isSaved := d.branch != ""
+
+			if isSaved {
+				parentDiff, err := d.parentDiff(ctx)
+				check(err)
+				if parentDiff != nil && parentDiff.commit != "" {
+					isStacked = true
+				}
 			}
-			if diff.prNumber != "" {
-				item.PrLink = fmt.Sprintf("%s/pulls/%s", repoURL, diff.prNumber)
+
+			item := tui.Item{
+				ID:        d.id,
+				Commit:    d.commit,
+				Subject:   d.getSubject(),
+				IsStacked: isStacked,
+				IsSaved:   isSaved,
+			}
+			if d.prNumber != "" {
+				item.PrLink = fmt.Sprintf("%s/pull/%s", repoURL, d.prNumber)
 			}
 			items = append(items, item)
 		}

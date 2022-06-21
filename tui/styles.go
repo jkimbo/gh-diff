@@ -26,14 +26,12 @@ func defaultStyles() (s styles) {
 		Padding(0, 1)
 
 	s.NormalTitle = lipgloss.NewStyle().
-		PaddingLeft(4).
 		Foreground(lipgloss.AdaptiveColor{Light: "#A49FA5", Dark: "#DDDDDD"})
 
 	s.NormalDesc = lipgloss.NewStyle().
 		Foreground(lipgloss.AdaptiveColor{Light: "#64748b", Dark: "#777777"})
 
 	s.SelectedTitle = lipgloss.NewStyle().
-		PaddingLeft(2).
 		Foreground(lipgloss.AdaptiveColor{Light: "#EE6FF8", Dark: "#EE6FF8"})
 
 	s.SelectedDesc = lipgloss.NewStyle().

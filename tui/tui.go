@@ -3,6 +3,7 @@ package tui
 import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/paginator"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -26,6 +27,7 @@ func NewModel(items []list.Item) Model {
 	l := list.New(items, newItemDelegate(&styles), defaultWidth, listHeight)
 	l.Title = "Your queue"
 	l.SetShowStatusBar(false)
+	l.Paginator.Type = paginator.Arabic
 	l.Styles.PaginationStyle = styles.Pagination
 	l.Styles.HelpStyle = styles.Help
 	l.SetFilteringEnabled(false)

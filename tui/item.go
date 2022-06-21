@@ -11,10 +11,12 @@ import (
 )
 
 type Item struct {
-	ID      string
-	Commit  string
-	Subject string
-	PrLink  string
+	ID        string
+	Commit    string
+	Subject   string
+	PrLink    string
+	IsSaved   bool
+	IsStacked bool
 }
 
 func (i Item) FilterValue() string { return i.Subject }
@@ -41,26 +43,33 @@ func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list
 		return
 	}
 
-	title := d.styles.NormalTitle.Render
+	subject := d.styles.NormalTitle.Copy().PaddingLeft(2).Render("◯ " + i.Subject)
 
 	if index == m.Index() {
-		title = func(s string) string {
-			return d.styles.SelectedTitle.Render("> " + s)
-		}
+		subject = d.styles.SelectedTitle.Copy().PaddingLeft(2).Render("◉ " + i.Subject)
 	}
-
-	subject := title(i.Subject)
 
 	var itemListStyle strings.Builder
 	itemListStyle.WriteString(subject)
 	itemListStyle.WriteString("\n")
 
-	pr := d.styles.NormalDesc.PaddingLeft(4).Render
-	if i.PrLink != "" {
-		itemListStyle.WriteString(pr(fmt.Sprintf(i.PrLink)))
+	// Render description
+	var desc strings.Builder
+
+	if i.IsStacked == true {
+		desc.WriteString(d.styles.NormalDesc.Copy().PaddingLeft(2).Render("│ "))
 	} else {
-		itemListStyle.WriteString(pr("-"))
+		desc.WriteString(d.styles.NormalDesc.Copy().PaddingLeft(4).Render(""))
 	}
+
+	pr := d.styles.NormalDesc.Render
+	if i.PrLink != "" {
+		desc.WriteString(pr(fmt.Sprintf(i.PrLink)))
+	} else {
+		desc.WriteString(pr("-"))
+	}
+
+	itemListStyle.WriteString(desc.String())
 
 	fmt.Fprint(w, itemListStyle.String())
 }
