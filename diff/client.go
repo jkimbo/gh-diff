@@ -204,23 +204,28 @@ func (c *Diffclient) LandDiff(ctx context.Context, commit string) error {
 		false,
 	)
 
-	// TODO
-	// childDiff, err := sqlDB.GetChildDiff(ctx, diff.ID)
-	// if err != nil {
-	// 	if err != sql.ErrNoRows {
-	// 		log.Fatalf("error: %v", err)
-	// 	}
-	// } else {
-	// 	fmt.Println("Syncing child diffs")
-	// 	childDiffID := childDiff.ID
+	dependantDiffs, err := d.getDependantDiffs(ctx)
+	check(err)
 
-	// 	// TODO sync all stacked on diffs
-	// 	for childDiffID != "" {
-	// 		// TODO Update PR base branch
-	// 		// TODO Sync diff
-	// 	}
-	// 	fmt.Println("Syncing done")
-	// }
+	if len(dependantDiffs) > 0 {
+		fmt.Printf("%d dependant diffs to sync\n", len(dependantDiffs))
+
+		for _, dependantDiff := range dependantDiffs {
+			fmt.Printf("syncing dependant diff: %s (%s)\n", dependantDiff.getSubject(), dependantDiff.id)
+			err = dependantDiff.Sync(ctx)
+			check(err)
+		}
+	}
+
+	st, err := d.getStack(ctx)
+	if err != nil {
+		return err
+	}
+
+	if st.size() > 1 {
+		// TODO update all PR descriptions and titles in the stack
+	}
+
 	return nil
 }
 
