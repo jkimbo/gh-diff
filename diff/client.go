@@ -232,7 +232,7 @@ func (c *Diffclient) LandDiff(ctx context.Context, commit string) error {
 	return nil
 }
 
-func (c *Diffclient) ListDiffs(ctx context.Context) (string, error) {
+func (c *Diffclient) Dashboard(ctx context.Context) (string, tui.DashboardAction, error) {
 	repoURL := mustCommand(
 		exec.Command("gh", "repo", "view", "--json=url", "--jq=.url"),
 		true,
@@ -298,12 +298,12 @@ func (c *Diffclient) ListDiffs(ctx context.Context) (string, error) {
 		choice := m.GetChoice()
 		i, ok := choice.(tui.Item)
 		if !ok {
-			return "", nil
+			return "", 0, nil
 		}
-		return i.Commit, nil
+		return i.Commit, m.GetAction(), nil
 	}
 
-	return "", nil
+	return "", 0, nil
 }
 
 // NewClient creates a new diff client

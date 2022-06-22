@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	"github.com/jkimbo/gh-diff/diff"
+	"github.com/jkimbo/gh-diff/tui"
 	"github.com/spf13/cobra"
 )
 
@@ -36,12 +37,18 @@ var rootCmd = &cobra.Command{
 			// TODO list recent diffs
 			err = c.Setup(ctx)
 			check(err)
-			commit, err := c.ListDiffs(ctx)
+			commit, action, err := c.Dashboard(ctx)
 			check(err)
 
 			if commit != "" {
-				err = c.SyncDiff(ctx, commit)
-				check(err)
+				switch action {
+				case tui.Sync:
+					err = c.SyncDiff(ctx, commit)
+					check(err)
+				case tui.Land:
+					err = c.LandDiff(ctx, commit)
+					check(err)
+				}
 				return
 			}
 
@@ -57,6 +64,7 @@ var rootCmd = &cobra.Command{
 		case "land":
 			err = c.Setup(ctx)
 			check(err)
+			commit = args[1]
 			err = c.LandDiff(ctx, commit)
 			check(err)
 		default:

@@ -10,25 +10,34 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+type PrStatus int
+
+const (
+	Pending PrStatus = iota
+	Passed
+	Failed
+)
+
 type Item struct {
-	ID        string
-	Commit    string
-	Subject   string
-	PrLink    string
-	IsSaved   bool
-	IsStacked bool
+	ID             string
+	Commit         string
+	Subject        string
+	PrLink         string
+	PrReviewStatus PrStatus
+	IsSaved        bool
+	IsStacked      bool
 }
 
 func (i Item) FilterValue() string { return i.Subject }
 
 type itemDelegate struct {
-	// keys   *keys.KeyMap
+	keys   *KeyMap
 	styles *styles
 }
 
-func newItemDelegate(styles *styles) *itemDelegate {
+func newItemDelegate(keys *KeyMap, styles *styles) *itemDelegate {
 	return &itemDelegate{
-		// keys:   keys,
+		keys:   keys,
 		styles: styles,
 	}
 }
@@ -75,9 +84,11 @@ func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list
 }
 
 func (d itemDelegate) ShortHelp() []key.Binding {
-	return []key.Binding{}
+	return []key.Binding{d.keys.Sync, d.keys.Land}
 }
 
 func (d itemDelegate) FullHelp() [][]key.Binding {
-	return [][]key.Binding{}
+	return [][]key.Binding{
+		{d.keys.Sync, d.keys.Land},
+	}
 }

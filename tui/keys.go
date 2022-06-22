@@ -8,6 +8,8 @@ type KeyMap struct {
 	CursorUp   key.Binding
 	CursorDown key.Binding
 	Enter      key.Binding
+	Sync       key.Binding
+	Land       key.Binding
 	Cancel     key.Binding
 	Quit       key.Binding
 	ForceQuit  key.Binding
@@ -15,6 +17,8 @@ type KeyMap struct {
 
 func (k KeyMap) ShortHelp() []key.Binding {
 	var kb []key.Binding
+
+	kb = append(kb, k.Sync, k.Land, k.Cancel, k.ForceQuit)
 
 	return kb
 }
@@ -35,19 +39,27 @@ func NewKeyMap() *KeyMap {
 		),
 		Enter: key.NewBinding(
 			key.WithKeys("enter"),
-			key.WithHelp("enter", "Check out the currently selected branch"),
+			key.WithHelp("enter", "sync diff"),
+		),
+		Sync: key.NewBinding(
+			key.WithKeys("s"),
+			key.WithHelp("s", "sync diff"),
+		),
+		Land: key.NewBinding(
+			key.WithKeys("l"),
+			key.WithHelp("l", "land diff"),
 		),
 		Cancel: key.NewBinding(
 			key.WithKeys("esc"),
-			key.WithHelp("esc", "Cancel"),
+			key.WithHelp("esc", "cancel"),
 		),
 		Quit: key.NewBinding(
 			key.WithKeys("q"),
-			key.WithHelp("q", "Quit"),
+			key.WithHelp("q", "quit"),
 		),
 		ForceQuit: key.NewBinding(
 			key.WithKeys("ctrl+c"),
-			key.WithHelp("ctrl+c", "Force quit"),
+			key.WithHelp("ctrl+c", "force quit"),
 		),
 	}
 }

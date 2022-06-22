@@ -12,10 +12,18 @@ const (
 	listHeight   = 15
 )
 
+type DashboardAction int
+
+const (
+	Sync DashboardAction = iota
+	Land
+)
+
 type Model struct {
 	list   list.Model
 	keyMap *KeyMap
 	choice list.Item
+	action DashboardAction
 	// styles styles.Styles
 	// state  state
 }
@@ -24,7 +32,7 @@ func NewModel(items []list.Item) Model {
 	styles := defaultStyles()
 	keys := NewKeyMap()
 
-	l := list.New(items, newItemDelegate(&styles), defaultWidth, listHeight)
+	l := list.New(items, newItemDelegate(keys, &styles), defaultWidth, listHeight)
 	l.Title = "Your queue"
 	l.SetShowStatusBar(false)
 	l.Paginator.Type = paginator.Arabic
@@ -58,8 +66,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keyMap.CursorDown):
 			m.list.CursorDown()
 
-		case key.Matches(msg, m.keyMap.Enter):
+		case key.Matches(msg, m.keyMap.Enter), key.Matches(msg, m.keyMap.Sync):
 			m.choice = m.list.SelectedItem()
+			m.action = Sync
+			return m, tea.Quit
+		case key.Matches(msg, m.keyMap.Land):
+			m.choice = m.list.SelectedItem()
+			m.action = Land
 			return m, tea.Quit
 		}
 
@@ -85,4 +98,9 @@ func (m Model) View() string {
 // GetChoice returns the chosen diff ID
 func (m Model) GetChoice() list.Item {
 	return m.choice
+}
+
+// GetAction returns the chosen action
+func (m Model) GetAction() DashboardAction {
+	return m.action
 }
