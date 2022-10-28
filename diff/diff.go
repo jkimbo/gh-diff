@@ -49,6 +49,7 @@ type diff struct {
 	branch       string
 	prNumber     string
 	parentDiffID string
+	git          *gitcmd
 }
 
 // Sync .
@@ -523,6 +524,34 @@ func (d *diff) childDiff(ctx context.Context) (*diff, error) {
 		return nil, err
 	}
 	return child, nil
+}
+
+func (d *diff) needsSyncing(ctx context.Context) (bool, error) {
+	// check if the diff needs syncing by diffing the commit contents against the
+	// contents on the branch
+	branch := d.branch
+	if branch == "" {
+		return false, fmt.Errorf("diff doesn't have a branch")
+	}
+
+	// get contents of the diff
+	commitContents := d.git.getPatch(fmt.Sprintf("%s^", d.commit), d.commit)
+
+	// get contents of the branch
+	baseRef := fmt.Sprintf("origin/%s", client.config.DefaultBranch)
+	parentDiff, err := d.parentDiff(ctx)
+	check(err)
+	if parentDiff != nil && parentDiff.commit != "" {
+		baseRef = parentDiff.branch
+	}
+	mergeBase := d.git.getMergeBase(baseRef, d.branch)
+	branchContents := d.git.getPatch(mergeBase, d.branch)
+
+	if commitContents != branchContents {
+		return true, nil
+	}
+
+	return false, nil
 }
 
 func newDiffFromID(ctx context.Context, diffID string) (*diff, error) {

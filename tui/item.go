@@ -21,14 +21,15 @@ const (
 type Item struct {
 	ID             string
 	Commit         string
-	Subject        string
+	Title          string
 	PrLink         string
 	PrReviewStatus PrStatus
 	IsSaved        bool
 	IsStacked      bool
+	NeedsSyncing   bool
 }
 
-func (i Item) FilterValue() string { return i.Subject }
+func (i Item) FilterValue() string { return i.Title }
 
 type itemDelegate struct {
 	keys   *KeyMap
@@ -52,10 +53,14 @@ func (d itemDelegate) Render(w io.Writer, m list.Model, index int, listItem list
 		return
 	}
 
-	subject := d.styles.NormalTitle.Copy().PaddingLeft(2).Render("◯ " + i.Subject)
+	diffTitle := i.Title
+	if i.NeedsSyncing {
+		diffTitle = "* " + diffTitle
+	}
+	subject := d.styles.NormalTitle.Copy().PaddingLeft(2).Render("◯ " + diffTitle)
 
 	if index == m.Index() {
-		subject = d.styles.SelectedTitle.Copy().PaddingLeft(2).Render("◉ " + i.Subject)
+		subject = d.styles.SelectedTitle.Copy().PaddingLeft(2).Render("◉ " + diffTitle)
 	}
 
 	var itemListStyle strings.Builder

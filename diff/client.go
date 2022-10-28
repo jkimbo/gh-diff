@@ -262,6 +262,7 @@ func (c *Diffclient) Dashboard(ctx context.Context) (string, tui.DashboardAction
 			check(err)
 
 			var isStacked bool
+			var needsSyncing bool
 			isSaved := d.branch != ""
 
 			if isSaved {
@@ -270,14 +271,18 @@ func (c *Diffclient) Dashboard(ctx context.Context) (string, tui.DashboardAction
 				if parentDiff != nil && parentDiff.commit != "" {
 					isStacked = true
 				}
+
+				needsSyncing, err = d.needsSyncing(ctx)
+				check(err)
 			}
 
 			item := tui.Item{
-				ID:        d.id,
-				Commit:    d.commit,
-				Subject:   d.getSubject(),
-				IsStacked: isStacked,
-				IsSaved:   isSaved,
+				ID:           d.id,
+				Commit:       d.commit,
+				Title:        d.getSubject(),
+				IsStacked:    isStacked,
+				IsSaved:      isSaved,
+				NeedsSyncing: needsSyncing,
 			}
 			if d.prNumber != "" {
 				item.PrLink = fmt.Sprintf("%s/pull/%s", repoURL, d.prNumber)
