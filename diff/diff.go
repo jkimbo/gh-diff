@@ -284,7 +284,7 @@ func (d *diff) syncCommitToBranch(ctx context.Context, commit, branchName, baseR
 
 	mustCommand(
 		exec.Command(
-			"git", "push", "origin", branchName, "--force",
+			"git", "push", "origin", branchName, "--force-with-lease",
 		),
 		false,
 		false,
