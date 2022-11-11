@@ -535,19 +535,10 @@ func (d *diff) needsSyncing(ctx context.Context) (bool, error) {
 	}
 
 	// get contents of the diff
-	commitContents := d.git.getPatch(fmt.Sprintf("%s^", d.commit), d.commit)
+	patchID1 := d.git.getPatchID(d.commit)
+	patchID2 := d.git.getPatchID(d.branch)
 
-	// get contents of the branch
-	baseRef := fmt.Sprintf("origin/%s", client.config.DefaultBranch)
-	parentDiff, err := d.parentDiff(ctx)
-	check(err)
-	if parentDiff != nil && parentDiff.commit != "" {
-		baseRef = parentDiff.branch
-	}
-	mergeBase := d.git.getMergeBase(baseRef, d.branch)
-	branchContents := d.git.getPatch(mergeBase, d.branch)
-
-	if commitContents != branchContents {
+	if patchID1 != patchID2 {
 		return true, nil
 	}
 

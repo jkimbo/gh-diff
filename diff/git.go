@@ -1,6 +1,7 @@
 package diff
 
 import (
+	"fmt"
 	"os/exec"
 	"strings"
 )
@@ -31,6 +32,23 @@ func (c *gitcmd) getPatch(ref string, base string) string {
 	}
 
 	return commitContents.String()
+}
+
+func (c *gitcmd) getPatchID(ref string) string {
+	rawCmd := fmt.Sprintf("git show %s | git patch-id --stable", ref)
+
+	cmd := exec.Command(
+		"bash", "-c", rawCmd,
+	)
+
+	output := mustCommand(
+		cmd,
+		true,
+		false,
+	)
+
+	parts := strings.Split(output, " ")
+	return parts[0]
 }
 
 func (c *gitcmd) getMergeBase(commitA string, commitB string) string {
